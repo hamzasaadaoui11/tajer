@@ -123,6 +123,49 @@ class LocalDatabase {
     return this.getTombstones(collection).includes(id);
   }
 
+  // --- Synced IDs for delta syncing ---
+  public getSyncedIds(collection: string): string[] {
+    try {
+      const key = `${this.getPrefix()}synced_${collection}`;
+      return JSON.parse(localStorage.getItem(key) || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  public addSyncedId(collection: string, id: string): void {
+    try {
+      const key = `${this.getPrefix()}synced_${collection}`;
+      const list: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!list.includes(id)) {
+        list.push(id);
+        localStorage.setItem(key, JSON.stringify(list));
+      }
+    } catch (e) {
+      console.error(`Failed to add synced ID for ${collection}`, e);
+    }
+  }
+
+  public removeSyncedId(collection: string, id: string): void {
+    try {
+      const key = `${this.getPrefix()}synced_${collection}`;
+      const list: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      const filtered = list.filter((i: string) => i !== id);
+      localStorage.setItem(key, JSON.stringify(filtered));
+    } catch (e) {
+      console.error(`Failed to remove synced ID for ${collection}`, e);
+    }
+  }
+
+  public setSyncedIds(collection: string, ids: string[]): void {
+    try {
+      const key = `${this.getPrefix()}synced_${collection}`;
+      localStorage.setItem(key, JSON.stringify(ids));
+    } catch (e) {
+      console.error(`Failed to set synced IDs for ${collection}`, e);
+    }
+  }
+
   // --- Initial Setup & Verification ---
   public initialize(customUser?: { id?: string; email?: string; name?: string }): { business: Business; branch: Branch; user: User } {
     let businesses = this.get<Business>('businesses');
