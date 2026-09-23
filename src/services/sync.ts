@@ -150,8 +150,11 @@ class SyncEngine {
         }
       }
 
-      // 5. Push Customers & Debts
-      const localCustomers = db.getCustomers(bizId);
+      // 5. Push Customers & Debts (excluding mock seed data)
+      const localCustomers = db.getCustomers(bizId).filter(c => 
+        !['cust-1', 'cust-2', 'cust-3'].includes(c.id) &&
+        !['السيد أحمد الإدريسي', 'السيدة فاطمة الزهراء العلوي', 'مقهى الأندلس (السيد رشيد)'].includes(c.name)
+      );
       if (localCustomers.length > 0) {
         const custPayload = localCustomers.map(c => ({
           id: c.id,
@@ -177,8 +180,11 @@ class SyncEngine {
         }
       }
 
-      // 6. Push Suppliers & Debts
-      const localSuppliers = db.getSuppliers(bizId);
+      // 6. Push Suppliers & Debts (excluding mock seed data)
+      const localSuppliers = db.getSuppliers(bizId).filter(s => 
+        !['sup-1', 'sup-2'].includes(s.id) &&
+        !['شركة توزيع الألبان المركزية', 'شركة التوزيع السريع المغرب', 'مجموعة المشروبات والمياه المعدنية'].includes(s.name)
+      );
       if (localSuppliers.length > 0) {
         const suppPayload = localSuppliers.map(s => ({
           id: s.id,
@@ -463,14 +469,33 @@ class SyncEngine {
         console.warn('Pull products notice:', e);
       }
 
-      // 17. Pull Remote Customers & Debts
+      // 17. Pull Remote Customers & Debts (excluding mock seed data)
       try {
+        // Automatically purge any previously saved mock customers from Supabase
+        await supabase
+          .from('customers')
+          .delete()
+          .eq('business_id', bizId)
+          .in('name', ['السيد أحمد الإدريسي', 'السيدة فاطمة الزهراء العلوي', 'مقهى الأندلس (السيد رشيد)']);
+        await supabase
+          .from('customers')
+          .delete()
+          .in('id', ['cust-1', 'cust-2', 'cust-3']);
+
         const { data: remoteCustomers } = await supabase
           .from('customers')
           .select('*')
           .eq('business_id', bizId);
         if (remoteCustomers && remoteCustomers.length > 0) {
+          const forbiddenCustNames = new Set([
+            'السيد أحمد الإدريسي',
+            'السيدة فاطمة الزهراء العلوي',
+            'مقهى الأندلس (السيد رشيد)'
+          ]);
           for (const rc of remoteCustomers) {
+            if (['cust-1', 'cust-2', 'cust-3'].includes(rc.id) || forbiddenCustNames.has(rc.name)) {
+              continue;
+            }
             db.saveCustomer({
               id: rc.id,
               business_id: rc.business_id,
@@ -493,14 +518,33 @@ class SyncEngine {
         console.warn('Pull customers notice:', e);
       }
 
-      // 18. Pull Remote Suppliers & Debts
+      // 18. Pull Remote Suppliers & Debts (excluding mock seed data)
       try {
+        // Automatically purge any previously saved mock suppliers from Supabase
+        await supabase
+          .from('suppliers')
+          .delete()
+          .eq('business_id', bizId)
+          .in('name', ['شركة توزيع الألبان المركزية', 'شركة التوزيع السريع المغرب', 'مجموعة المشروبات والمياه المعدنية']);
+        await supabase
+          .from('suppliers')
+          .delete()
+          .in('id', ['sup-1', 'sup-2']);
+
         const { data: remoteSuppliers } = await supabase
           .from('suppliers')
           .select('*')
           .eq('business_id', bizId);
         if (remoteSuppliers && remoteSuppliers.length > 0) {
+          const forbiddenSuppNames = new Set([
+            'شركة توزيع الألبان المركزية',
+            'شركة التوزيع السريع المغرب',
+            'مجموعة المشروبات والمياه المعدنية'
+          ]);
           for (const rs of remoteSuppliers) {
+            if (['sup-1', 'sup-2'].includes(rs.id) || forbiddenSuppNames.has(rs.name)) {
+              continue;
+            }
             db.saveSupplier({
               id: rs.id,
               business_id: rs.business_id,

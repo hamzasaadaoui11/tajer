@@ -126,11 +126,11 @@ class LocalDatabase {
       this.set('branches', branches);
       this.set('users', users);
 
-      // Seed realistic initial demo data
+      // Seed realistic initial categories and products, but start customers and suppliers clean
       const seed = generateSeedData(initialBusiness.id, initialBranch.id);
       this.set('categories', seed.categories);
-      this.set('suppliers', seed.suppliers);
-      this.set('customers', seed.customers);
+      this.set('suppliers', []);
+      this.set('customers', []);
       this.set('products', seed.products);
 
       // Initial cash balance
@@ -400,6 +400,42 @@ class LocalDatabase {
 
   public deleteSupplier(id: string): void {
     this.set('suppliers', this.get<Supplier>('suppliers').filter(s => s.id !== id));
+  }
+
+  // --- Purge any default mock customers/suppliers ---
+  public cleanupDemoContacts(businessId?: string): void {
+    const demoCustIds = new Set(['cust-1', 'cust-2', 'cust-3']);
+    const demoCustNames = new Set([
+      'السيد أحمد الإدريسي',
+      'السيدة فاطمة الزهراء العلوي',
+      'مقهى الأندلس (السيد رشيد)'
+    ]);
+    const demoSuppIds = new Set(['sup-1', 'sup-2']);
+    const demoSuppNames = new Set([
+      'شركة توزيع الألبان المركزية',
+      'شركة التوزيع السريع المغرب',
+      'مجموعة المشروبات والمياه المعدنية'
+    ]);
+
+    const customers = this.get<Customer>('customers');
+    const filteredCustomers = customers.filter(c => 
+      (!businessId || c.business_id === businessId) 
+        ? (!demoCustIds.has(c.id) && !demoCustNames.has(c.name))
+        : true
+    );
+    if (filteredCustomers.length !== customers.length) {
+      this.set('customers', filteredCustomers);
+    }
+
+    const suppliers = this.get<Supplier>('suppliers');
+    const filteredSuppliers = suppliers.filter(s => 
+      (!businessId || s.business_id === businessId)
+        ? (!demoSuppIds.has(s.id) && !demoSuppNames.has(s.name))
+        : true
+    );
+    if (filteredSuppliers.length !== suppliers.length) {
+      this.set('suppliers', filteredSuppliers);
+    }
   }
 
   // --- Stock Movements & Inventory Count ---

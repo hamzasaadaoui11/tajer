@@ -16,6 +16,7 @@ import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
 import { Customer, Supplier } from '../../types';
 import { formatMAD } from '../../i18n/locales';
+import { getSupabase } from '../../services/supabase';
 
 interface ContactsViewProps {
   initialType?: 'customers' | 'suppliers';
@@ -23,6 +24,11 @@ interface ContactsViewProps {
 
 export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'customers' }) => {
   const { business, formatCurrency, refreshData, dataVersion, lang } = useApp();
+
+  // Ensure demo contacts are purged on load
+  React.useEffect(() => {
+    db.cleanupDemoContacts(business.id);
+  }, [business.id]);
 
   const [activeTab, setActiveTab] = useState<'customers' | 'suppliers'>(initialType);
   const [search, setSearch] = useState('');
@@ -649,11 +655,27 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
                 {lang === 'ar' ? 'إلغاء' : 'Annuler'}
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (deleteConfirm.type === 'customer') {
                     db.deleteCustomer(deleteConfirm.id);
+                    const supabase = getSupabase();
+                    if (supabase) {
+                      try {
+                        await supabase.from('customers').delete().eq('id', deleteConfirm.id);
+                      } catch (e) {
+                        console.warn('Delete customer from cloud notice:', e);
+                      }
+                    }
                   } else {
                     db.deleteSupplier(deleteConfirm.id);
+                    const supabase = getSupabase();
+                    if (supabase) {
+                      try {
+                        await supabase.from('suppliers').delete().eq('id', deleteConfirm.id);
+                      } catch (e) {
+                        console.warn('Delete supplier from cloud notice:', e);
+                      }
+                    }
                   }
                   setDeleteConfirm(null);
                   refreshData();

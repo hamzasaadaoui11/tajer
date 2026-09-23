@@ -268,6 +268,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 setBusinessState(tenantInit.business);
               }
 
+              // Purge any unwanted mock demo contacts
+              db.cleanupDemoContacts(res.restoredBusiness?.id || tenantInit.business.id);
+
               if (isMounted) {
                 setIsOnboardingComplete(res.completed);
                 setIsAuthenticated(true);
@@ -310,6 +313,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } else {
             setBusinessState(tenantInit.business);
           }
+          db.cleanupDemoContacts(res.restoredBusiness?.id || tenantInit.business.id);
           setIsOnboardingComplete(res.completed);
           setIsAuthenticated(true);
         } else if (event === 'SIGNED_OUT') {
@@ -371,6 +375,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
           setBusinessState(tenantInit.business);
         }
+        db.cleanupDemoContacts(res.restoredBusiness?.id || tenantInit.business.id);
 
         setIsOnboardingComplete(res.completed);
         setIsAuthenticated(true);
@@ -416,7 +421,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [isDark, setIsDarkState] = useState<boolean>(() => {
-    return localStorage.getItem('tajer_theme') === 'dark';
+    return false;
   });
 
   // 3. Online Status
@@ -462,8 +467,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // 1. Initial sync after login
+    // 1. Initial cleanup and sync after login
+    db.cleanupDemoContacts(business.id);
     syncEngine.syncAll().then(res => {
+      db.cleanupDemoContacts(business.id);
       if (res.success) setDataVersion(v => v + 1);
     }).catch(() => {});
 

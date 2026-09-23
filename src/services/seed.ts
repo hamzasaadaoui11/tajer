@@ -85,79 +85,9 @@ export function generateSeedData(businessId: string, branchId: string) {
     { id: 'cat-5', business_id: businessId, name: 'مواد التنظيف', icon: 'sparkles', color: '#10b981', created_at: new Date().toISOString() },
   ];
 
-  const suppliers: Supplier[] = [
-    {
-      id: 'sup-1',
-      business_id: businessId,
-      name: 'شركة توزيع الألبان المركزية',
-      phone: '05 22 45 88 90',
-      address: 'الحي الصناعي عين السبع',
-      city: 'الدار البيضاء',
-      ice: '001584793000045',
-      ifNumber: '40215896',
-      total_purchased: 4500,
-      total_debt: 1200,
-      created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: 'sup-2',
-      business_id: businessId,
-      name: 'مجموعة المشروبات والمياه المعدنية',
-      phone: '05 37 68 11 22',
-      address: 'طريق فاس',
-      city: 'الرباط',
-      ice: '002498711000012',
-      ifNumber: '38192034',
-      total_purchased: 3800,
-      total_debt: 0,
-      created_at: new Date(Date.now() - 20 * 86400000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
+  const suppliers: Supplier[] = [];
 
-  const customers: Customer[] = [
-    {
-      id: 'cust-1',
-      business_id: businessId,
-      name: 'السيد أحمد الإدريسي',
-      phone: '06 61 23 45 67',
-      address: 'حي الرياض، عمارة 14',
-      city: 'الرباط',
-      total_spent: 1450,
-      total_debt: 350,
-      notes: 'عميل دائم، يسدد كل أسبوع',
-      created_at: new Date(Date.now() - 15 * 86400000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: 'cust-2',
-      business_id: businessId,
-      name: 'السيدة فاطمة الزهراء العلوي',
-      phone: '06 72 89 12 34',
-      address: 'شارع الحسن الثاني',
-      city: 'سلا',
-      total_spent: 820,
-      total_debt: 0,
-      notes: 'الدفع دائماً نقداً',
-      created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: 'cust-3',
-      business_id: businessId,
-      name: 'مقهى الأندلس (السيد رشيد)',
-      phone: '07 01 44 55 66',
-      address: 'حي أكدال',
-      city: 'الرباط',
-      ice: '003291845000078',
-      total_spent: 4200,
-      total_debt: 680,
-      notes: 'طلبات أسبوعية للحليب والقهوة',
-      created_at: new Date(Date.now() - 25 * 86400000).toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
+  const customers: Customer[] = [];
 
   const products: Product[] = [
     {
