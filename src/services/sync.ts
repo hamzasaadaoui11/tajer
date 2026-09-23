@@ -405,20 +405,41 @@ class SyncEngine {
         }
       }
 
-      // 15. Pull remote products from Supabase
-      const { data: remoteProducts, error: pullErr } = await supabase
-        .from('products')
-        .select('*')
-        .eq('business_id', bizId);
+      // 15. Pull Remote Categories
+      try {
+        const { data: remoteCategories } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('business_id', bizId);
+        if (remoteCategories && remoteCategories.length > 0) {
+          for (const rc of remoteCategories) {
+            db.saveCategory({
+              id: rc.id,
+              business_id: rc.business_id,
+              name: rc.name,
+              color: rc.color || '#0d9488',
+              icon: rc.icon || 'tag',
+              created_at: rc.created_at || new Date().toISOString(),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Pull categories notice:', e);
+      }
 
-      if (!pullErr && remoteProducts && remoteProducts.length > 0) {
-        for (const rp of remoteProducts) {
-          const localMatch = db.getProductById(rp.id);
-          if (!localMatch) {
+      // 16. Pull Remote Products & Update Stock / Details
+      try {
+        const { data: remoteProducts, error: prodPullErr } = await supabase
+          .from('products')
+          .select('*')
+          .eq('business_id', bizId);
+
+        if (!prodPullErr && remoteProducts && remoteProducts.length > 0) {
+          for (const rp of remoteProducts) {
             db.saveProduct({
               id: rp.id,
               business_id: rp.business_id,
-              branch_id: rp.branch_id,
+              branch_id: rp.branch_id || branchId,
               category_id: rp.category_id,
               barcode: rp.barcode || '',
               sku: rp.sku || '',
@@ -433,11 +454,195 @@ class SyncEngine {
               tax_rate: Number(rp.tax_rate ?? 20),
               is_active: rp.is_active !== false,
               image_url: rp.image_url,
-              created_at: rp.created_at,
-              updated_at: rp.updated_at,
+              created_at: rp.created_at || new Date().toISOString(),
+              updated_at: rp.updated_at || new Date().toISOString(),
             }, 'مزامنة السحابة');
           }
         }
+      } catch (e) {
+        console.warn('Pull products notice:', e);
+      }
+
+      // 17. Pull Remote Customers & Debts
+      try {
+        const { data: remoteCustomers } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('business_id', bizId);
+        if (remoteCustomers && remoteCustomers.length > 0) {
+          for (const rc of remoteCustomers) {
+            db.saveCustomer({
+              id: rc.id,
+              business_id: rc.business_id,
+              name: rc.name,
+              phone: rc.phone || '',
+              address: rc.address,
+              city: rc.city,
+              ice: rc.ice,
+              ifNumber: rc.if_number,
+              notes: rc.notes,
+              credit_limit: Number(rc.credit_limit || 0),
+              total_spent: Number(rc.total_spent || 0),
+              total_debt: Number(rc.total_debt || 0),
+              created_at: rc.created_at || new Date().toISOString(),
+              updated_at: rc.updated_at || new Date().toISOString(),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Pull customers notice:', e);
+      }
+
+      // 18. Pull Remote Suppliers & Debts
+      try {
+        const { data: remoteSuppliers } = await supabase
+          .from('suppliers')
+          .select('*')
+          .eq('business_id', bizId);
+        if (remoteSuppliers && remoteSuppliers.length > 0) {
+          for (const rs of remoteSuppliers) {
+            db.saveSupplier({
+              id: rs.id,
+              business_id: rs.business_id,
+              name: rs.name,
+              phone: rs.phone || '',
+              address: rs.address,
+              city: rs.city,
+              ice: rs.ice,
+              ifNumber: rs.if_number,
+              notes: rs.notes,
+              total_purchased: Number(rs.total_purchased || 0),
+              total_debt: Number(rs.total_debt || 0),
+              created_at: rs.created_at || new Date().toISOString(),
+              updated_at: rs.updated_at || new Date().toISOString(),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Pull suppliers notice:', e);
+      }
+
+      // 19. Pull Remote Sales
+      try {
+        const { data: remoteSales } = await supabase
+          .from('sales')
+          .select('*')
+          .eq('business_id', bizId)
+          .order('created_at', { ascending: false })
+          .limit(300);
+
+        if (remoteSales && remoteSales.length > 0) {
+          const localSales = db.getSales(bizId);
+          const localIds = new Set(localSales.map(s => s.id));
+          const toAdd: any[] = [];
+
+          for (const rs of remoteSales) {
+            if (!localIds.has(rs.id)) {
+              toAdd.push({
+                id: rs.id,
+                business_id: rs.business_id,
+                branch_id: rs.branch_id || branchId,
+                invoice_number: rs.invoice_number,
+                customer_id: rs.customer_id,
+                customer_name: rs.customer_name || 'زبون عام',
+                items: rs.items || [],
+                subtotal: Number(rs.subtotal || 0),
+                discount: Number(rs.discount || 0),
+                tax_total: Number(rs.tax_total || 0),
+                total: Number(rs.total || 0),
+                amount_paid: Number(rs.amount_paid || 0),
+                amount_due: Number(rs.amount_due || 0),
+                payment_method: rs.payment_method || 'CASH',
+                status: rs.status || 'COMPLETED',
+                user_name: rs.user_name || 'كاشير',
+                notes: rs.notes,
+                created_at: rs.created_at || new Date().toISOString(),
+              });
+            }
+          }
+          if (toAdd.length > 0) {
+            db.set('sales', [...toAdd, ...localSales]);
+          }
+        }
+      } catch (e) {
+        console.warn('Pull sales notice:', e);
+      }
+
+      // 20. Pull Remote Expenses
+      try {
+        const { data: remoteExpenses } = await supabase
+          .from('expenses')
+          .select('*')
+          .eq('business_id', bizId)
+          .order('created_at', { ascending: false })
+          .limit(200);
+
+        if (remoteExpenses && remoteExpenses.length > 0) {
+          const localExp = db.getExpenses(bizId);
+          const localExpIds = new Set(localExp.map(e => e.id));
+          const toAddExp: any[] = [];
+
+          for (const re of remoteExpenses) {
+            if (!localExpIds.has(re.id)) {
+              toAddExp.push({
+                id: re.id,
+                business_id: re.business_id,
+                branch_id: re.branch_id || branchId,
+                category: re.category,
+                amount: Number(re.amount || 0),
+                payment_method: re.payment_method || 'CASH',
+                description: re.description,
+                user_name: re.user_name,
+                receipt_url: re.receipt_url,
+                created_at: re.created_at || new Date().toISOString(),
+              });
+            }
+          }
+          if (toAddExp.length > 0) {
+            db.set('expenses', [...toAddExp, ...localExp]);
+          }
+        }
+      } catch (e) {
+        console.warn('Pull expenses notice:', e);
+      }
+
+      // 21. Pull Remote Cash Transactions
+      try {
+        const { data: remoteCash } = await supabase
+          .from('cash_transactions')
+          .select('*')
+          .eq('business_id', bizId)
+          .order('created_at', { ascending: false })
+          .limit(200);
+
+        if (remoteCash && remoteCash.length > 0) {
+          const localCash = db.getCashTransactions(bizId);
+          const localCashIds = new Set(localCash.map(c => c.id));
+          const toAddCash: any[] = [];
+
+          for (const rc of remoteCash) {
+            if (!localCashIds.has(rc.id)) {
+              toAddCash.push({
+                id: rc.id,
+                business_id: rc.business_id,
+                branch_id: rc.branch_id || branchId,
+                type: rc.type,
+                category: rc.category,
+                amount: Number(rc.amount || 0),
+                balance_after: Number(rc.balance_after || 0),
+                reference: rc.reference,
+                description: rc.description,
+                user_name: rc.user_name,
+                created_at: rc.created_at || new Date().toISOString(),
+              });
+            }
+          }
+          if (toAddCash.length > 0) {
+            db.set('cash_transactions', [...toAddCash, ...localCash]);
+          }
+        }
+      } catch (e) {
+        console.warn('Pull cash notice:', e);
       }
 
       return {

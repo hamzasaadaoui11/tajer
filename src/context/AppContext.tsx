@@ -443,12 +443,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  const triggerSync = useCallback(() => {
+  const triggerSync = useCallback(async () => {
     setSyncStatus('syncing');
-    setTimeout(() => {
+    try {
+      const res = await syncEngine.syncAll();
+      if (res.success) {
+        setSyncStatus('synced');
+        setDataVersion(v => v + 1);
+      } else {
+        setSyncStatus(navigator.onLine ? 'synced' : 'offline');
+      }
+    } catch {
       setSyncStatus(navigator.onLine ? 'synced' : 'offline');
-    }, 1500);
+    }
   }, []);
+
+  // Continuous Auto-Sync: Runs periodically and on app resume/focus
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // 1. Initial sync after login
+    syncEngine.syncAll().then(res => {
+      if (res.success) setDataVersion(v => v + 1);
+    }).catch(() => {});
+
+    // 2. Periodic sync every 20 seconds
+    const interval = setInterval(() => {
+      if (navigator.onLine) {
+        syncEngine.syncAll().then(res => {
+          if (res.success && res.processed > 0) setDataVersion(v => v + 1);
+        }).catch(() => {});
+      }
+    }, 20000);
+
+    // 3. Sync on app focus / tab switch / resume
+    const handleResumeOrFocus = () => {
+      if (navigator.onLine) {
+        syncEngine.syncAll().then(res => {
+          if (res.success) setDataVersion(v => v + 1);
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('focus', handleResumeOrFocus);
+    window.addEventListener('online', handleResumeOrFocus);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        handleResumeOrFocus();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleResumeOrFocus);
+      window.removeEventListener('online', handleResumeOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [isAuthenticated]);
 
   // Set HTML dir and lang based on chosen language
   useEffect(() => {
@@ -531,6 +583,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshData = useCallback(() => {
     setDataVersion(v => v + 1);
+    // Background auto-sync to cloud when online
+    if (navigator.onLine) {
+      setTimeout(() => {
+        syncEngine.syncAll().catch(() => {});
+      }, 600);
+    }
   }, []);
 
   // Update business
