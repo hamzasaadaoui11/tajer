@@ -12,6 +12,7 @@ import {
 import { translations, Language, formatMAD } from '../i18n/locales';
 import { db } from '../services/db';
 import { getSupabase } from '../services/supabase';
+import { syncEngine } from '../services/sync';
 
 export type AppView = 
   | 'dashboard' 
@@ -142,6 +143,101 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem('tajer_remembered_email') || '';
   });
 
+  // Helper to check onboarding across local device AND cloud (Supabase metadata and businesses table)
+  const resolveOnboardingStatusAndRestore = async (
+    userId: string,
+    userMetadata?: any
+  ): Promise<{ completed: boolean; restoredBusiness?: Business }> => {
+    // 1. If already marked complete in this browser's storage
+    if (db.isOnboardingComplete()) {
+      return { completed: true };
+    }
+
+    // 2. Check Supabase Auth user_metadata
+    const hasMetadataFlag = !!userMetadata?.onboarding_completed;
+
+    // 3. Query Supabase 'businesses' table directly in the cloud
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { data: remoteBiz, error } = await supabase
+          .from('businesses')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (!error && remoteBiz && remoteBiz.name) {
+          const restored: Business = {
+            id: remoteBiz.id,
+            name: remoteBiz.name,
+            activity: remoteBiz.activity || 'general_store',
+            currency: remoteBiz.currency || 'MAD',
+            phone: remoteBiz.phone || '',
+            address: remoteBiz.address || '',
+            city: remoteBiz.city || '',
+            ice: remoteBiz.ice || '',
+            ifNumber: remoteBiz.if_number || '',
+            rc: remoteBiz.rc || '',
+            patente: remoteBiz.patente || '',
+            cnss: remoteBiz.cnss || '',
+            logo: remoteBiz.logo || '',
+            stamp: remoteBiz.stamp || '',
+            invoiceColor: remoteBiz.invoice_color || '#C02626',
+            receiptFooter: remoteBiz.receipt_footer || '',
+            a4Footer: remoteBiz.a4_footer || '',
+            bankInfo: remoteBiz.bank_info || '',
+            capital: remoteBiz.capital || '',
+            email: remoteBiz.email || '',
+            taxEnabled: remoteBiz.tax_enabled ?? false,
+            defaultTaxRate: Number(remoteBiz.default_tax_rate ?? 20),
+            created_at: remoteBiz.created_at || new Date().toISOString(),
+            updated_at: remoteBiz.updated_at || new Date().toISOString(),
+          };
+
+          db.saveBusiness(restored);
+          db.setOnboardingComplete(true);
+
+          // Restore branches if any
+          try {
+            const { data: remoteBranches } = await supabase
+              .from('branches')
+              .select('*')
+              .eq('business_id', userId);
+            if (remoteBranches && remoteBranches.length > 0) {
+              for (const rb of remoteBranches) {
+                db.addBranch({
+                  id: rb.id,
+                  business_id: rb.business_id,
+                  name: rb.name,
+                  city: rb.city || '',
+                  address: rb.address || '',
+                  phone: rb.phone || '',
+                  is_main: rb.is_main ?? true,
+                  created_at: rb.created_at,
+                });
+              }
+            }
+          } catch {}
+
+          // Pull products, categories, customers down to this device
+          syncEngine.syncAll().catch(e => console.warn('Sync on new device restore notice:', e));
+
+          return { completed: true, restoredBusiness: restored };
+        }
+      } catch (e) {
+        console.warn('Error resolving cloud onboarding status:', e);
+      }
+    }
+
+    if (hasMetadataFlag) {
+      db.setOnboardingComplete(true);
+      syncEngine.syncAll().catch(e => console.warn('Sync on metadata hit notice:', e));
+      return { completed: true };
+    }
+
+    return { completed: false };
+  };
+
   // Check Supabase session on app mount
   useEffect(() => {
     let isMounted = true;
@@ -160,14 +256,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 email: session.user.email,
                 name: session.user.user_metadata?.name || session.user.user_metadata?.full_name,
               });
-              setBusinessState(tenantInit.business);
               setBranchState(tenantInit.branch);
               setUserState(tenantInit.user);
               setAuthEmail(session.user.email || '');
-              setIsOnboardingComplete(db.isOnboardingComplete());
-              setIsAuthenticated(true);
-              setIsAuthChecking(false);
-              return;
+
+              // Check if account already completed onboarding in cloud/previous device
+              const res = await resolveOnboardingStatusAndRestore(session.user.id, session.user.user_metadata);
+              if (res.restoredBusiness) {
+                setBusinessState(res.restoredBusiness);
+              } else {
+                setBusinessState(tenantInit.business);
+              }
+
+              if (isMounted) {
+                setIsOnboardingComplete(res.completed);
+                setIsAuthenticated(true);
+                setIsAuthChecking(false);
+                return;
+              }
             }
           }
         } catch (err) {
@@ -194,11 +300,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             email: session.user.email,
             name: session.user.user_metadata?.name || session.user.user_metadata?.full_name,
           });
-          setBusinessState(tenantInit.business);
           setBranchState(tenantInit.branch);
           setUserState(tenantInit.user);
           setAuthEmail(session.user.email || '');
-          setIsOnboardingComplete(db.isOnboardingComplete());
+
+          const res = await resolveOnboardingStatusAndRestore(session.user.id, session.user.user_metadata);
+          if (res.restoredBusiness) {
+            setBusinessState(res.restoredBusiness);
+          } else {
+            setBusinessState(tenantInit.business);
+          }
+          setIsOnboardingComplete(res.completed);
           setIsAuthenticated(true);
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
@@ -248,12 +360,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: data.user.email,
           name: data.user.user_metadata?.name || data.user.user_metadata?.full_name,
         });
-        setBusinessState(tenantInit.business);
         setBranchState(tenantInit.branch);
         setUserState(tenantInit.user);
         setAuthEmail(data.user.email || '');
-        const isDone = db.isOnboardingComplete();
-        setIsOnboardingComplete(isDone);
+
+        // Resolve onboarding from cloud to see if this account already finished on PC or another phone
+        const res = await resolveOnboardingStatusAndRestore(data.user.id, data.user.user_metadata);
+        if (res.restoredBusiness) {
+          setBusinessState(res.restoredBusiness);
+        } else {
+          setBusinessState(tenantInit.business);
+        }
+
+        setIsOnboardingComplete(res.completed);
         setIsAuthenticated(true);
         setCurrentView('dashboard');
         return { success: true };
@@ -369,6 +488,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsOnboardingComplete(true);
     setCurrentView('dashboard');
     refreshData();
+
+    // Persist onboarding status to Supabase so ANY other phone or PC knows it's already done
+    const supabase = getSupabase();
+    if (supabase) {
+      supabase.auth.updateUser({
+        data: {
+          onboarding_completed: true,
+          business_name: updatedBiz.name,
+        }
+      }).catch(e => console.warn('Supabase updateUser meta error:', e));
+
+      syncEngine.syncAll().catch(e => console.warn('Initial sync after onboarding error:', e));
+    }
   };
 
   const updateBusiness = (bizData: Partial<Business>) => {
