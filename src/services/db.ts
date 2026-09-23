@@ -62,6 +62,67 @@ class LocalDatabase {
     }
   }
 
+  // --- Deletion Queue for Syncing ---
+  public addToDeleteQueue(collection: string, id: string): void {
+    try {
+      const key = `${this.getPrefix()}deleted_${collection}`;
+      const queue: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!queue.includes(id)) {
+        queue.push(id);
+        localStorage.setItem(key, JSON.stringify(queue));
+      }
+    } catch (e) {
+      console.error(`Failed to add to delete queue for ${collection}`, e);
+    }
+  }
+
+  public getDeleteQueue(collection: string): string[] {
+    try {
+      const key = `${this.getPrefix()}deleted_${collection}`;
+      return JSON.parse(localStorage.getItem(key) || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  public clearDeleteQueue(collection: string, ids: string[]): void {
+    try {
+      const key = `${this.getPrefix()}deleted_${collection}`;
+      const queue: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      const filtered = queue.filter((id: string) => !ids.includes(id));
+      localStorage.setItem(key, JSON.stringify(filtered));
+    } catch (e) {
+      console.error(`Failed to clear delete queue for ${collection}`, e);
+    }
+  }
+
+  // --- Tombstones for Robust Deletions ---
+  public addToTombstones(collection: string, id: string): void {
+    try {
+      const key = `${this.getPrefix()}tombstones_${collection}`;
+      const list: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!list.includes(id)) {
+        list.push(id);
+        localStorage.setItem(key, JSON.stringify(list));
+      }
+    } catch (e) {
+      console.error(`Failed to add to tombstones for ${collection}`, e);
+    }
+  }
+
+  public getTombstones(collection: string): string[] {
+    try {
+      const key = `${this.getPrefix()}tombstones_${collection}`;
+      return JSON.parse(localStorage.getItem(key) || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  public isTombstoned(collection: string, id: string): boolean {
+    return this.getTombstones(collection).includes(id);
+  }
+
   // --- Initial Setup & Verification ---
   public initialize(customUser?: { id?: string; email?: string; name?: string }): { business: Business; branch: Branch; user: User } {
     let businesses = this.get<Business>('businesses');
@@ -126,12 +187,11 @@ class LocalDatabase {
       this.set('branches', branches);
       this.set('users', users);
 
-      // Seed realistic initial categories and products, but start customers and suppliers clean
-      const seed = generateSeedData(initialBusiness.id, initialBranch.id);
-      this.set('categories', seed.categories);
+      // Start with clean empty tables by default as requested
+      this.set('categories', []);
       this.set('suppliers', []);
       this.set('customers', []);
-      this.set('products', seed.products);
+      this.set('products', []);
 
       // Initial cash balance
       const initialCash: CashTransaction = {
@@ -282,6 +342,8 @@ class LocalDatabase {
   public deleteCategory(id: string): void {
     const list = this.get<Category>('categories').filter(c => c.id !== id);
     this.set('categories', list);
+    this.addToDeleteQueue('categories', id);
+    this.addToTombstones('categories', id);
   }
 
   // --- Products ---
@@ -307,31 +369,34 @@ class LocalDatabase {
     return this.get<Product>('products').find(p => p.business_id === businessId && (p.barcode === barcode || p.sku === barcode));
   }
 
-  public saveProduct(product: Product, userName: string = 'النظام'): void {
+  public saveProduct(product: Product, userName: string = 'النظام', silent: boolean = false): void {
     const list = this.get<Product>('products');
     const idx = list.findIndex(p => p.id === product.id);
     const isNew = idx === -1;
+    const isSync = silent || userName.includes('مزامنة') || userName.includes('sync') || userName === 'مزامنة السحابة';
 
     if (isNew) {
       list.push(product);
-      this.addStockMovement({
-        id: 'mov-' + Date.now(),
-        business_id: product.business_id,
-        branch_id: product.branch_id,
-        product_id: product.id,
-        product_name: product.name,
-        type: 'INITIAL',
-        quantity_before: 0,
-        quantity_change: product.current_stock,
-        quantity_after: product.current_stock,
-        notes: 'مخزون افتتاحي عند إنشاء المنتج',
-        user_name: userName,
-        created_at: new Date().toISOString(),
-      });
-      this.addAuditLog(product.business_id, userName, 'إضافة منتج', `إضافة منتج جديد: ${product.name} بسعر ${product.sale_price} DH`);
+      if (!isSync) {
+        this.addStockMovement({
+          id: 'mov-' + Date.now(),
+          business_id: product.business_id,
+          branch_id: product.branch_id,
+          product_id: product.id,
+          product_name: product.name,
+          type: 'INITIAL',
+          quantity_before: 0,
+          quantity_change: product.current_stock,
+          quantity_after: product.current_stock,
+          notes: 'مخزون افتتاحي عند إنشاء المنتج',
+          user_name: userName,
+          created_at: new Date().toISOString(),
+        });
+        this.addAuditLog(product.business_id, userName, 'إضافة منتج', `إضافة منتج جديد: ${product.name} بسعر ${product.sale_price} DH`);
+      }
     } else {
       const old = list[idx];
-      if (old.current_stock !== product.current_stock) {
+      if (!isSync && old.current_stock !== product.current_stock) {
         this.addStockMovement({
           id: 'mov-' + Date.now(),
           business_id: product.business_id,
@@ -347,8 +412,10 @@ class LocalDatabase {
           created_at: new Date().toISOString(),
         });
       }
-      list[idx] = { ...product, updated_at: new Date().toISOString() };
-      this.addAuditLog(product.business_id, userName, 'تعديل منتج', `تعديل بيانات المنتج: ${product.name}`);
+      if (!isSync) {
+        this.addAuditLog(product.business_id, userName, 'تعديل منتج', `تعديل بيانات المنتج: ${product.name}`);
+      }
+      list[idx] = { ...product, updated_at: product.updated_at || new Date().toISOString() };
     }
     this.set('products', list);
   }
@@ -358,6 +425,8 @@ class LocalDatabase {
     const prod = list.find(p => p.id === id);
     if (prod) {
       this.set('products', list.filter(p => p.id !== id));
+      this.addToDeleteQueue('products', id);
+      this.addToTombstones('products', id);
       this.addAuditLog(businessId, userName, 'حذف منتج', `حذف المنتج: ${prod.name}`);
     }
   }
@@ -380,6 +449,8 @@ class LocalDatabase {
 
   public deleteCustomer(id: string): void {
     this.set('customers', this.get<Customer>('customers').filter(c => c.id !== id));
+    this.addToDeleteQueue('customers', id);
+    this.addToTombstones('customers', id);
   }
 
   // --- Suppliers ---
@@ -400,6 +471,8 @@ class LocalDatabase {
 
   public deleteSupplier(id: string): void {
     this.set('suppliers', this.get<Supplier>('suppliers').filter(s => s.id !== id));
+    this.addToDeleteQueue('suppliers', id);
+    this.addToTombstones('suppliers', id);
   }
 
   // --- Purge any default mock customers/suppliers ---

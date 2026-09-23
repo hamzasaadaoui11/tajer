@@ -2,62 +2,34 @@ import React, { useState } from 'react';
 import { 
   Settings, 
   Store, 
-  Users, 
-  Database, 
   Globe, 
   Moon, 
   Sun, 
-  Download, 
-  Upload, 
-  ShieldCheck, 
-  Plus, 
-  Check, 
-  Trash2,
-  RefreshCw,
-  Lock,
-  Cloud,
+  LogOut,
   Palette,
   Image,
   FileText,
-  Link as LinkIcon,
-  Key,
-  ExternalLink,
-  CheckCircle2,
-  AlertCircle,
-  Copy,
-  Eye,
-  EyeOff,
-  LogOut
+  ShieldCheck,
+  Trash2,
+  Upload,
+  Check
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { db } from '../../services/db';
-import { syncEngine } from '../../services/sync';
-import { 
-  getSupabaseConfig, 
-  setSupabaseConfig, 
-  clearSupabaseConfig, 
-  testSupabaseConnection, 
-  isSupabaseConfigured 
-} from '../../services/supabase';
-import { User, UserRole } from '../../types';
 
 export const SettingsView: React.FC = () => {
   const { 
     business, 
     updateBusiness, 
-    user, 
-    switchUser, 
     language, 
     setLanguage, 
     theme, 
     toggleTheme, 
-    refreshData,
     lang,
     logout,
     authEmail
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'store' | 'users' | 'backup' | 'general'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'general'>('store');
   const [storeSection, setStoreSection] = useState<'branding' | 'general' | 'legal' | 'footer'>('branding');
 
   // Business form state
@@ -108,30 +80,6 @@ export const SettingsView: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Sync state
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatusMsg, setSyncStatusMsg] = useState('');
-
-  // Supabase Configuration State
-  const initialSupabaseConfig = getSupabaseConfig();
-  const [supabaseUrl, setSupabaseUrl] = useState(initialSupabaseConfig.url);
-  const [supabaseKey, setSupabaseKey] = useState(initialSupabaseConfig.key);
-  const [showSupabaseKey, setShowSupabaseKey] = useState(false);
-  const [isTestingSupabase, setIsTestingSupabase] = useState(false);
-  const [supabaseFeedback, setSupabaseFeedback] = useState<{ success: boolean; message: string } | null>(null);
-  const [isConfigured, setIsConfigured] = useState(isSupabaseConfigured());
-  const [showSqlModal, setShowSqlModal] = useState(false);
-  const [copiedSql, setCopiedSql] = useState(false);
-
-  // Add User State
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const [newUserName, setNewUserName] = useState('');
-  const [newUserPhone, setNewUserPhone] = useState('');
-  const [newUserPin, setNewUserPin] = useState('');
-  const [newUserRole, setNewUserRole] = useState<UserRole>('CASHIER');
-
-  const usersList = db.getUsers(business.id);
-
   // Save Store Settings
   const handleSaveStore = (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,138 +106,6 @@ export const SettingsView: React.FC = () => {
     alert(lang === 'ar' ? 'تم حفظ إعدادات المتجر بنجاح!' : 'Paramètres du magasin enregistrés avec succès !');
   };
 
-  // Export JSON Backup
-  const handleExportBackup = () => {
-    const jsonStr = db.exportAllData();
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `sauvegarde_tajer_${business.name}_${new Date().toISOString().split('T')[0]}.json`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Import JSON Backup
-  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const confirmMsg = lang === 'ar' 
-        ? 'تنبيه: استعادة نسخة احتياطية سيقوم بتحديث واستبدال البيانات الحالية. هل تود المتابعة؟'
-        : 'Attention : Restaurer une sauvegarde va remplacer les données actuelles. Voulez-vous continuer ?';
-      if (confirm(confirmMsg)) {
-        const success = db.importAllData(content);
-        if (success) {
-          alert(lang === 'ar' ? 'تمت استعادة البيانات بنجاح!' : 'Données restaurées avec succès !');
-          refreshData();
-          window.location.reload();
-        } else {
-          alert(lang === 'ar' ? 'ملف النسخة الاحتياطية غير صالح' : 'Fichier de sauvegarde invalide.');
-        }
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  // Trigger Cloud Sync
-  const handleManualSync = async () => {
-    setIsSyncing(true);
-    setSyncStatusMsg(lang === 'ar' ? 'جارٍ مزامنة الحركات مع الخادم السحابي...' : 'Synchronisation Cloud en cours...');
-    try {
-      const res = await syncEngine.syncAll();
-      if (res.success) {
-        setSyncStatusMsg(lang === 'ar' 
-          ? `تمت المزامنة بنجاح! تم رفع ${res.processed} عملية.`
-          : `Synchronisation réussie ! ${res.processed} opération(s) envoyée(s).`);
-      } else {
-        setSyncStatusMsg(lang === 'ar' 
-          ? `تم العمل محلياً (غير متصل أو بانتظار الإعداد): ${res.errors[0] || 'تم الحفظ محلياً'}`
-          : `Mode local (hors-ligne ou en attente) : ${res.errors[0] || 'Sauvegardé localement'}`);
-      }
-    } catch (err: any) {
-      setSyncStatusMsg(lang === 'ar' 
-        ? 'حدث خطأ أثناء المزامنة: ' + (err.message || 'خطأ')
-        : 'Erreur lors de la synchronisation : ' + (err.message || 'Erreur'));
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  // Test and save Supabase credentials
-  const handleSaveAndTestSupabase = async () => {
-    if (!supabaseUrl.trim() || !supabaseKey.trim()) {
-      setSupabaseFeedback({
-        success: false,
-        message: lang === 'ar' ? 'يرجى إدخال الرابط (Project URL) والمفتاح (Anon Key).' : 'Veuillez renseigner le Project URL et la clé Anon Key.',
-      });
-      return;
-    }
-
-    setIsTestingSupabase(true);
-    setSupabaseFeedback(null);
-    try {
-      const result = await testSupabaseConnection(supabaseUrl, supabaseKey);
-      setSupabaseFeedback(result);
-      if (result.success) {
-        setSupabaseConfig(supabaseUrl, supabaseKey);
-        setIsConfigured(true);
-      }
-    } catch (e: any) {
-      setSupabaseFeedback({
-        success: false,
-        message: e?.message || (lang === 'ar' ? 'فشل الاتصال بـ Supabase' : 'Échec de connexion à Supabase'),
-      });
-    } finally {
-      setIsTestingSupabase(false);
-    }
-  };
-
-  // Disconnect Supabase
-  const handleDisconnectSupabase = () => {
-    clearSupabaseConfig();
-    setSupabaseUrl('');
-    setSupabaseKey('');
-    setIsConfigured(false);
-    setSupabaseFeedback({
-      success: true,
-      message: lang === 'ar' ? 'تم قطع الاتصال بالسحابة والعودة للوضع المحلي.' : 'Déconnecté du Cloud, retour au mode local.',
-    });
-  };
-
-  // Add User
-  const handleCreateUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newUserName.trim() || newUserPin.length !== 4) {
-      alert('يرجى إدخال اسم مستخدم ورمز PIN مكون من 4 أرقام');
-      return;
-    }
-
-    const newUser: User = {
-      id: 'usr-' + Date.now(),
-      business_id: business.id,
-      branch_id: user.branch_id,
-      name: newUserName.trim(),
-      email: '',
-      phone: newUserPhone.trim(),
-      role: newUserRole,
-      pin_code: newUserPin,
-      is_active: true,
-      created_at: new Date().toISOString(),
-    };
-
-    db.saveUser(newUser);
-    setIsUserModalOpen(false);
-    setNewUserName('');
-    setNewUserPhone('');
-    setNewUserPin('');
-    refreshData();
-  };
-
   return (
     <div className={`max-w-7xl mx-auto p-3 sm:p-6 pb-24 ${lang === 'ar' ? 'text-right' : 'text-left'} space-y-6`}>
       
@@ -303,8 +119,8 @@ export const SettingsView: React.FC = () => {
             </h2>
             <span className="text-xs text-slate-500">
               {lang === 'ar' 
-                ? 'تخصيص بيانات المحل، المستخدمين، النسخ الاحتياطي واللغة' 
-                : 'Personnalisation du magasin, utilisateurs, sauvegardes et langue'}
+                ? 'تخصيص بيانات المحل، الهوية البصرية، والمظهر واللغة' 
+                : 'Personnalisation des données du magasin, identité et langue'}
             </span>
           </div>
 
@@ -335,43 +151,25 @@ export const SettingsView: React.FC = () => {
           </button>
 
           {/* Tab switch */}
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold gap-1 w-full sm:w-auto">
-          <button
-            onClick={() => setActiveTab('store')}
-            className={`px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1 w-full sm:w-auto shrink-0 ${
-              activeTab === 'store' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
-            }`}
-          >
-            <Store className="w-3.5 h-3.5" />
-            <span>{lang === 'ar' ? 'بيانات المحل' : 'Infos Magasin'}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1 w-full sm:w-auto shrink-0 ${
-              activeTab === 'users' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>{lang === 'ar' ? 'المستخدمين' : 'Utilisateurs'}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('backup')}
-            className={`px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1 w-full sm:w-auto shrink-0 ${
-              activeTab === 'backup' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
-            }`}
-          >
-            <Database className="w-3.5 h-3.5" />
-            <span>{lang === 'ar' ? 'النسخ الاحتياطي' : 'Sauvegardes'}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('general')}
-            className={`px-2.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1 w-full sm:w-auto shrink-0 ${
-              activeTab === 'general' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>{lang === 'ar' ? 'المظهر واللغة' : 'Apparence & Langue'}</span>
-          </button>
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold gap-1 w-full sm:w-auto">
+            <button
+              onClick={() => setActiveTab('store')}
+              className={`px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 ${
+                activeTab === 'store' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
+              }`}
+            >
+              <Store className="w-4 h-4" />
+              <span>{lang === 'ar' ? 'بيانات المحل' : 'Infos Magasin'}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('general')}
+              className={`px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 ${
+                activeTab === 'general' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
+              }`}
+            >
+              <Globe className="w-4 h-4" />
+              <span>{lang === 'ar' ? 'المظهر واللغة' : 'Apparence & Langue'}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -883,267 +681,6 @@ export const SettingsView: React.FC = () => {
         </form>
       )}
 
-      {/* Tab: Users & Roles */}
-      {activeTab === 'users' && (
-        <div className={`space-y-4 max-w-2xl ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-          <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800">
-            <div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                {lang === 'ar' ? 'المستخدمين المصرح لهم' : 'Utilisateurs & Caissiers autorisés'}
-              </h3>
-              <p className="text-xs text-slate-500">
-                {lang === 'ar' ? 'حسابات الدخول ورموز PIN للعمال والكاشير' : 'Comptes d\'accès et codes PIN du personnel'}
-              </p>
-            </div>
-            <button
-              onClick={() => setIsUserModalOpen(true)}
-              className="px-3 py-2 rounded-xl bg-teal-600 text-white font-bold text-xs flex items-center gap-1 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{lang === 'ar' ? 'إضافة كاشير / مسير' : 'Ajouter un utilisateur'}</span>
-            </button>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
-            {usersList.map(u => (
-              <div key={u.id} className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-2xl bg-teal-50 text-teal-600 font-bold flex items-center justify-center text-xs">
-                    {u.name.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>{u.name}</span>
-                      {u.id === user.id && (
-                        <span className="bg-teal-50 text-teal-700 text-[10px] px-2 py-0.5 rounded-md font-semibold">
-                          {lang === 'ar' ? 'الحساب النشط حالياً' : 'Compte actif'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
-                      <span>
-                        {u.role === 'ADMIN' 
-                          ? (lang === 'ar' ? 'المالك / المدير العام' : 'Propriétaire / Administrateur') 
-                          : u.role === 'MANAGER' 
-                            ? (lang === 'ar' ? 'مسير المحل' : 'Gérant de magasin') 
-                            : (lang === 'ar' ? 'كاشير مبيعات' : 'Caissier')}
-                      </span>
-                      <span>•</span>
-                      <span className="font-mono">PIN: ••••</span>
-                    </div>
-                  </div>
-                </div>
-
-                {u.id !== user.id && (
-                  <button
-                    onClick={() => switchUser(u)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
-                  >
-                    {lang === 'ar' ? 'تبديل الدخول له' : 'Basculer'}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tab: Backup & Sync */}
-      {activeTab === 'backup' && (
-        <div className={`space-y-4 max-w-2xl ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-          {/* Supabase Cloud Connection Setup */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold text-sm">
-                <Cloud className="w-5 h-5 text-emerald-600" />
-                <span>{lang === 'ar' ? 'الربط مع سحابة Supabase (PostgreSQL)' : 'Connexion Cloud Supabase (PostgreSQL)'}</span>
-              </div>
-              <span className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold flex items-center gap-1.5 ${
-                isConfigured 
-                  ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
-                  : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
-              }`}>
-                <span className={`w-2 h-2 rounded-full ${isConfigured ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                <span>{isConfigured ? (lang === 'ar' ? 'متصل بالسحابة' : 'Connecté au Cloud') : (lang === 'ar' ? 'وضع محلي (غير مربوط)' : 'Mode local (non connecté)')}</span>
-              </span>
-            </div>
-
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              {lang === 'ar'
-                ? 'اربط متجرك مع قاعدة بيانات Supabase السحابية لمزامنة المبيعات والمخزون بين عدة هواتف، والوصول إلى بياناتك من أي مكان، وحمايتها من الضياع.'
-                : 'Connectez votre magasin à Supabase pour synchroniser automatiquement vos ventes, stocks et clients entre plusieurs appareils et sécuriser vos données.'}
-            </p>
-
-            <div className="space-y-3 pt-1">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1.5">
-                  <LinkIcon className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{lang === 'ar' ? 'رابط المشروع (Project URL) :' : 'URL du projet (Project URL) :'}</span>
-                </label>
-                <input
-                  type="text"
-                  value={supabaseUrl}
-                  onChange={(e) => setSupabaseUrl(e.target.value)}
-                  placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co"
-                  dir="ltr"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{lang === 'ar' ? 'المفتاح العام (anon public key) :' : 'Clé publique (anon public key) :'}</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showSupabaseKey ? 'text' : 'password'}
-                    value={supabaseKey}
-                    onChange={(e) => setSupabaseKey(e.target.value)}
-                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    dir="ltr"
-                    className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSupabaseKey(!showSupabaseKey)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
-                  >
-                    {showSupabaseKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={handleSaveAndTestSupabase}
-                  disabled={isTestingSupabase}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition active:scale-95 disabled:opacity-50 cursor-pointer"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isTestingSupabase ? 'animate-spin' : ''}`} />
-                  <span>{isTestingSupabase ? (lang === 'ar' ? 'جارٍ الاختبار...' : 'Test en cours...') : (lang === 'ar' ? 'اختبار وحفظ الإعدادات' : 'Tester & Sauvegarder')}</span>
-                </button>
-
-                {isConfigured && (
-                  <button
-                    type="button"
-                    onClick={handleDisconnectSupabase}
-                    className="px-3.5 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 font-bold text-xs transition cursor-pointer"
-                  >
-                    {lang === 'ar' ? 'قطع الاتصال' : 'Déconnecter'}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setShowSqlModal(true)}
-                  className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
-                >
-                  <FileText className="w-3.5 h-3.5 text-slate-500" />
-                  <span>{lang === 'ar' ? 'كود إنشاء الجداول (SQL Schema)' : 'Schéma SQL Supabase'}</span>
-                </button>
-              </div>
-
-              {supabaseFeedback && (
-                <div className={`p-3 rounded-xl text-xs font-semibold flex items-start gap-2 ${
-                  supabaseFeedback.success 
-                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/50' 
-                    : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800/50'
-                }`}>
-                  {supabaseFeedback.success ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                  )}
-                  <span>{supabaseFeedback.message}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Setup Guide */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-300 space-y-1.5">
-              <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                <span>{lang === 'ar' ? '📌 كيفية الربط في دقيقتين :' : '📌 Comment configurer Supabase :'}</span>
-              </p>
-              <ol className={`list-decimal space-y-1 ${lang === 'ar' ? 'pr-4' : 'pl-4'}`}>
-                <li>{lang === 'ar' ? 'افتح حساباً مجانياً على موقع supabase.com وأنشئ مشروعاً جديداً.' : 'Créez un compte gratuit sur supabase.com et un nouveau projet.'}</li>
-                <li>{lang === 'ar' ? 'ادخل إلى Project Settings > API وانسخ Project URL و anon public key والصقهما هنا.' : 'Dans Project Settings > API, copiez l\'URL et l\'anon key puis collez-les ici.'}</li>
-                <li>{lang === 'ar' ? 'اضغط على "كود إنشاء الجداول (SQL Schema)" وانسخه ثم ألصقه في SQL Editor في Supabase واضغط Run.' : 'Cliquez sur "Schéma SQL Supabase", copiez le code dans l\'éditeur SQL de Supabase et exécutez-le.'}</li>
-              </ol>
-            </div>
-          </div>
-
-          {/* Cloud Sync Action */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 space-y-3">
-            <div className="flex items-center gap-2 text-teal-600 font-bold text-sm">
-              <RefreshCw className="w-5 h-5" />
-              <span>{lang === 'ar' ? 'مزامنة البيانات السحابية (Synchronisation)' : 'Synchronisation Cloud'}</span>
-            </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              {lang === 'ar' 
-                ? 'اضغط هنا لرفع كل السلع والزبائن والمبيعات الجديدة إلى السحابة، وسحب أي تحديثات تمت من أجهزة أخرى.' 
-                : 'Synchronisez immédiatement vos données locales avec la base de données Supabase.'}
-            </p>
-
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                onClick={handleManualSync}
-                disabled={isSyncing}
-                className="px-5 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-teal-600/20 disabled:opacity-50 cursor-pointer"
-              >
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>
-                  {isSyncing 
-                    ? (lang === 'ar' ? 'جارٍ المزامنة...' : 'Synchronisation...') 
-                    : (lang === 'ar' ? 'مزامنة السحابية الآن' : 'Synchroniser maintenant')}
-                </span>
-              </button>
-            </div>
-
-            {syncStatusMsg && (
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                {syncStatusMsg}
-              </div>
-            )}
-          </div>
-
-          {/* Local File Backup */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 space-y-3">
-            <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold text-sm">
-              <Database className="w-5 h-5 text-teal-600" />
-              <span>{lang === 'ar' ? 'النسخ الاحتياطي المحلي الكامل (Sauvegarde Locale)' : 'Sauvegarde locale complète (Export / Import)'}</span>
-            </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              {lang === 'ar' 
-                ? 'يمكنك تحميل نسخة كاملة من جميع سلعك، فواتيرك، زبائنك وديونك بملف JSON آمن وتخزينه في هاتفك أو إرساله إلى واتساب.' 
-                : 'Téléchargez une copie complète de vos articles, ventes, clients et créances au format JSON pour la conserver ou la transférer.'}
-            </p>
-
-            <div className="flex flex-wrap gap-2 pt-2">
-              <button
-                onClick={handleExportBackup}
-                className="px-4 py-2.5 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white font-bold text-xs flex items-center gap-2 cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>{lang === 'ar' ? 'تصدير نسخة احتياطية (Télécharger JSON)' : 'Exporter sauvegarde (Télécharger JSON)'}</span>
-              </button>
-
-              <label className="px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-2 cursor-pointer">
-                <Upload className="w-4 h-4" />
-                <span>{lang === 'ar' ? 'استعادة نسخة (Restaurer JSON)' : 'Restaurer sauvegarde (Importer JSON)'}</span>
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleImportBackup}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Tab: General & Theme */}
       {activeTab === 'general' && (
         <div className={`bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 space-y-6 max-w-2xl ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
@@ -1188,237 +725,6 @@ export const SettingsView: React.FC = () => {
                   : (theme === 'dark' ? 'Passer au mode Clair' : 'Passer au mode Sombre')}
               </span>
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Add User Modal */}
-      {isUserModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className={`w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-3">
-              {lang === 'ar' ? 'إضافة مستخدم جديد' : 'Ajouter un nouvel utilisateur'}
-            </h3>
-
-            <form onSubmit={handleCreateUser} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold mb-1">
-                  {lang === 'ar' ? 'اسم المستخدم *' : 'Nom de l\'utilisateur *'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newUserName}
-                  onChange={e => setNewUserName(e.target.value)}
-                  placeholder={lang === 'ar' ? 'ياسين الكاشير' : 'Ex: Yassine'}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold mb-1">
-                  {lang === 'ar' ? 'رقم الهاتف' : 'Numéro de téléphone'}
-                </label>
-                <input
-                  type="text"
-                  value={newUserPhone}
-                  onChange={e => setNewUserPhone(e.target.value)}
-                  placeholder="06 00 00 00 00"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono text-left"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold mb-1">
-                  {lang === 'ar' ? 'الدور والصلاحية' : 'Rôle et autorisations'}
-                </label>
-                <select
-                  value={newUserRole}
-                  onChange={e => setNewUserRole(e.target.value as UserRole)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white dark:bg-slate-800"
-                >
-                  <option value="CASHIER">
-                    {lang === 'ar' ? 'كاشير مبيعات (POS وبيع فقط)' : 'Caissier (POS & Vente uniquement)'}
-                  </option>
-                  <option value="MANAGER">
-                    {lang === 'ar' ? 'مسير متجر (إدارة المخزون والمشتريات)' : 'Gérant (Stock, Achats et Caisse)'}
-                  </option>
-                  <option value="ADMIN">
-                    {lang === 'ar' ? 'مالك ومدير عام (كل الصلاحيات)' : 'Administrateur (Tous les droits)'}
-                  </option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold mb-1">
-                  {lang === 'ar' ? 'رمز PIN للدخول (4 أرقام) *' : 'Code PIN d\'accès (4 chiffres) *'}
-                </label>
-                <input
-                  type="password"
-                  maxLength={4}
-                  required
-                  value={newUserPin}
-                  onChange={e => setNewUserPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="1234"
-                  className="w-full px-3 py-2 rounded-xl border border-teal-500 text-center font-extrabold text-sm tracking-widest"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-bold text-xs cursor-pointer"
-                >
-                  {lang === 'ar' ? 'حفظ المستخدم' : 'Enregistrer'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsUserModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer"
-                >
-                  {lang === 'ar' ? 'إلغاء' : 'Annuler'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* SQL Schema Modal */}
-      {showSqlModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                  {lang === 'ar' ? 'مخطط قاعدة بيانات Supabase (SQL Schema)' : 'Schéma SQL Supabase'}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSqlModal(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="py-4 space-y-3 flex-1 overflow-y-auto">
-              <p className="text-xs text-slate-500 leading-relaxed">
-                {lang === 'ar'
-                  ? 'قم بنسخ هذا الكود بالكامل، ثم افتح مشروعك في Supabase واذهب إلى SQL Editor، ألصق الكود واضغط على Run. سيتم إنشاء جميع الجداول اللازمة تلقائياً.'
-                  : 'Copiez ce code SQL, ouvrez votre projet Supabase dans le "SQL Editor", collez-le et cliquez sur "Run" pour créer toutes les tables automatiquement.'}
-              </p>
-
-              <div className="relative">
-                <a
-                  href="/supabase_schema.sql"
-                  download="tajer_supabase_schema.sql"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-200 mb-2"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>{lang === 'ar' ? 'تحميل ملف tajer_supabase_schema.sql' : 'Télécharger le fichier SQL'}</span>
-                </a>
-              </div>
-
-              <div className="p-3 bg-slate-950 text-slate-200 font-mono text-[11px] rounded-xl overflow-x-auto max-h-60 border border-slate-800 leading-relaxed select-all">
-                <pre>{`-- TAJER POS SUPABASE SCHEMA (Summary)
--- Run the full file downloaded above or visit /supabase_schema.sql
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-CREATE TABLE IF NOT EXISTS public.products (
-  id TEXT PRIMARY KEY,
-  business_id TEXT,
-  branch_id TEXT,
-  category_id TEXT,
-  barcode TEXT,
-  sku TEXT,
-  name TEXT NOT NULL,
-  description TEXT,
-  cost_price NUMERIC DEFAULT 0,
-  selling_price NUMERIC DEFAULT 0,
-  min_selling_price NUMERIC,
-  stock NUMERIC DEFAULT 0,
-  min_stock NUMERIC DEFAULT 0,
-  unit TEXT DEFAULT 'unit',
-  tax_rate NUMERIC DEFAULT 20,
-  is_active BOOLEAN DEFAULT true,
-  image_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.customers (
-  id TEXT PRIMARY KEY,
-  business_id TEXT,
-  name TEXT NOT NULL,
-  phone TEXT,
-  email TEXT,
-  address TEXT,
-  city TEXT,
-  ice TEXT,
-  credit_limit NUMERIC DEFAULT 0,
-  current_balance NUMERIC DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.sales (
-  id TEXT PRIMARY KEY,
-  business_id TEXT,
-  branch_id TEXT,
-  cashier_id TEXT,
-  cashier_name TEXT,
-  customer_id TEXT,
-  customer_name TEXT,
-  invoice_number TEXT,
-  subtotal NUMERIC DEFAULT 0,
-  discount_amount NUMERIC DEFAULT 0,
-  discount_percent NUMERIC DEFAULT 0,
-  tax_total NUMERIC DEFAULT 0,
-  total NUMERIC DEFAULT 0,
-  payment_method TEXT DEFAULT 'CASH',
-  payment_status TEXT DEFAULT 'PAID',
-  amount_paid NUMERIC DEFAULT 0,
-  amount_change NUMERIC DEFAULT 0,
-  amount_remaining NUMERIC DEFAULT 0,
-  status TEXT DEFAULT 'COMPLETED',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);`}</pre>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  fetch('/supabase_schema.sql')
-                    .then(r => r.text())
-                    .then(txt => {
-                      navigator.clipboard.writeText(txt);
-                      setCopiedSql(true);
-                      setTimeout(() => setCopiedSql(false), 3000);
-                    })
-                    .catch(() => {
-                      setCopiedSql(true);
-                      setTimeout(() => setCopiedSql(false), 3000);
-                    });
-                }}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                {copiedSql ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedSql ? (lang === 'ar' ? 'تم نسخ الكود بالكامل!' : 'Copié !') : (lang === 'ar' ? 'نسخ الكود الكامل (Copier Tout)' : 'Copier Tout le SQL')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowSqlModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs cursor-pointer"
-              >
-                {lang === 'ar' ? 'إغلاق' : 'Fermer'}
-              </button>
-            </div>
           </div>
         </div>
       )}

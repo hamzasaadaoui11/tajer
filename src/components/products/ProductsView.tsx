@@ -369,7 +369,7 @@ export const ProductsView: React.FC = () => {
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
               {products.length === 0
-                ? (lang === 'ar' ? 'يمكنك البدء بإضافة أول سلعة يدوياً أو تعبئة المتجر فوراً بتشكيلة سلع مغربية جاهزة للتجربة.' : 'Vous pouvez commencer par ajouter un produit ou charger des données d\'exemple.')
+                ? (lang === 'ar' ? 'يمكنك البدء بإضافة أول سلعة يدوياً للمتجر الخاص بك.' : 'Vous pouvez commencer par ajouter un produit.')
                 : (lang === 'ar' ? 'جرّب تغيير كلمة البحث أو تصفية الفئات.' : 'Essayez de modifier votre recherche ou de filtrer par catégorie.')}
             </p>
             {products.length === 0 && (
@@ -380,13 +380,6 @@ export const ProductsView: React.FC = () => {
                 >
                   <Plus className="w-4 h-4" />
                   <span>{lang === 'ar' ? 'إضافة سلعة يدوياً' : 'Ajouter un produit'}</span>
-                </button>
-                <button
-                  onClick={handleSeedDemoData}
-                  className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>{lang === 'ar' ? 'إضافة سلع تجريبية مغربية' : 'Charger des produits de démonstration'}</span>
                 </button>
               </div>
             )}

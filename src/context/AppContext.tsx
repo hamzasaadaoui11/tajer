@@ -133,15 +133,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [business, setBusinessState] = useState<Business>(initData.business);
   const [branch, setBranchState] = useState<Branch>(initData.branch);
   const [user, setUserState] = useState<User>(initData.user);
-  const [currentView, setCurrentView] = useState<AppView>('dashboard');
-  const [dataVersion, setDataVersion] = useState<number>(1);
 
-  // 1.1 Supabase Authentication State
+  // 1.1 Supabase Authentication State (declared first to avoid Temporal Dead Zone reference errors in routing hooks)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [authEmail, setAuthEmail] = useState<string>(() => {
     return localStorage.getItem('tajer_remembered_email') || '';
   });
+
+  // Synchronize state with URL hash
+  const parseHash = (): AppView => {
+    const hash = window.location.hash.replace(/^#\/?/, '');
+    const validViews: AppView[] = [
+      'dashboard', 'pos', 'products', 'stock', 'sales', 'purchases',
+      'customers', 'suppliers', 'debts', 'expenses', 'cash', 'reports',
+      'users', 'branches', 'settings', 'onboarding'
+    ];
+    if (validViews.includes(hash as AppView)) {
+      return hash as AppView;
+    }
+    return 'dashboard';
+  };
+
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    if (!db.isOnboardingComplete()) {
+      return 'onboarding';
+    }
+    return parseHash();
+  });
+
+  // Sync state changes to URL Hash
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (currentView === 'onboarding') {
+        window.location.hash = '';
+      } else {
+        window.location.hash = `/${currentView}`;
+      }
+    }
+  }, [currentView, isAuthenticated]);
+
+  // Listen to browser Back/Forward navigation (hashchange)
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (!isAuthenticated) return;
+      if (!db.isOnboardingComplete()) {
+        setCurrentView('onboarding');
+        return;
+      }
+      const view = parseHash();
+      if (view !== currentView) {
+        setCurrentView(view);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [currentView, isAuthenticated]);
+
+  const [dataVersion, setDataVersion] = useState<number>(1);
 
   // Helper to check onboarding across local device AND cloud (Supabase metadata and businesses table)
   const resolveOnboardingStatusAndRestore = async (
@@ -163,7 +213,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const { data: remoteBiz, error } = await supabase
           .from('businesses')
           .select('*')
-          .eq('id', userId)
+          .or(`id.eq.${userId},id.eq.biz-${userId.substring(0, 8)}`)
           .maybeSingle();
 
         if (!error && remoteBiz && remoteBiz.name) {
@@ -196,6 +246,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           db.saveBusiness(restored);
           db.setOnboardingComplete(true);
+
+          // Clear pre-seeded local tables since they are returning users and should pull a clean slate from cloud
+          db.set('products', []);
+          db.set('categories', []);
+          db.set('cash_transactions', []);
+          db.set('suppliers', []);
+          db.set('customers', []);
 
           // Restore branches if any
           try {

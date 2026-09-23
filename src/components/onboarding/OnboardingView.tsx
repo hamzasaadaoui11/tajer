@@ -30,7 +30,7 @@ export const OnboardingView: React.FC = () => {
   const [ifNumber, setIfNumber] = useState(business.ifNumber || '');
   const [rc, setRc] = useState(business.rc || '');
   const [patente, setPatente] = useState(business.patente || '');
-  const [dataChoice, setDataChoice] = useState<'demo' | 'empty'>('demo');
+  const [dataChoice, setDataChoice] = useState<'demo' | 'empty'>('empty');
 
   const activities: { id: MerchantActivity; label: string; icon: string }[] = [
     { id: 'grocery', label: 'بقالة ومواد غذائية (Épicerie)', icon: '🛒' },
@@ -92,7 +92,7 @@ export const OnboardingView: React.FC = () => {
         {/* Step Indicator */}
         <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
-            {[1, 2, 3, 4].map(s => (
+            {[1, 2, 3].map(s => (
               <div
                 key={s}
                 className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition ${
@@ -108,12 +108,11 @@ export const OnboardingView: React.FC = () => {
             ))}
           </div>
           <div className="text-right">
-            <span className="text-xs text-slate-400">الخطوة {step} من 4</span>
+            <span className="text-xs text-slate-400">الخطوة {step} من 3</span>
             <div className="font-bold text-sm text-slate-900 dark:text-white">
               {step === 1 && 'اسم المتجر والنشاط'}
               {step === 2 && 'الموقع والاتصال'}
               {step === 3 && 'الهوية الضريبية بالمغرب (اختياري)'}
-              {step === 4 && 'تجهيز المتجر والبيانات'}
             </div>
           </div>
         </div>
@@ -273,58 +272,7 @@ export const OnboardingView: React.FC = () => {
           </div>
         )}
 
-        {/* STEP 4: Data Initialization Choice */}
-        {step === 4 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <p className="text-xs text-slate-500 mb-3">
-              كيف ترغب في بدء استخدام تطبيق تاجر؟
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setDataChoice('demo')}
-              className={`w-full p-4 rounded-2xl border text-right transition flex items-start gap-3 cursor-pointer ${
-                dataChoice === 'demo'
-                  ? 'bg-teal-50 dark:bg-teal-950/50 border-teal-500 ring-2 ring-teal-500'
-                  : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <div className="p-2.5 rounded-xl bg-teal-600 text-white shrink-0 mt-0.5">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="font-bold text-sm text-slate-900 dark:text-white mb-0.5">
-                  تجهيز المتجر بسلع مغربية تجريبية (موصى به)
-                </div>
-                <div className="text-xs text-slate-500 leading-relaxed">
-                  إضافة تشكيلة سلع مغربية أصلية بالدرهم مع عملاء وموردين لتجربة شاشة البيع وتجربة التطبيق فوراً.
-                </div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setDataChoice('empty')}
-              className={`w-full p-4 rounded-2xl border text-right transition flex items-start gap-3 cursor-pointer ${
-                dataChoice === 'empty'
-                  ? 'bg-teal-50 dark:bg-teal-950/50 border-teal-500 ring-2 ring-teal-500'
-                  : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <div className="p-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0 mt-0.5">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="font-bold text-sm text-slate-900 dark:text-white mb-0.5">
-                  البدء بمتجر فارغ تماماً (Production Ready)
-                </div>
-                <div className="text-xs text-slate-500 leading-relaxed">
-                  ابدأ مباشرة بإدخال سلعك الحقيقية وعملائك يدوياً أو عبر مسح الباركود دون أي بيانات افتراضية.
-                </div>
-              </div>
-            </button>
-          </div>
-        )}
+        {/* STEP 4: Removed to default to clean store */}
 
         {/* Wizard Controls */}
         <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
@@ -341,7 +289,7 @@ export const OnboardingView: React.FC = () => {
             <div />
           )}
 
-          {step < 4 ? (
+          {step < 3 ? (
             <button
               type="button"
               onClick={() => setStep(step + 1)}
