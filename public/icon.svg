@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e" />
+      <stop offset="100%" stop-color="#042f2e" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+  </defs>
+  <!-- Background with squircle safe padding for PWA -->
+  <rect width="512" height="512" rx="128" fill="url(#grad)" />
+  
+  <!-- Store Canopy & Shopping icon -->
+  <g transform="translate(96, 96)" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Store Roof / Canopy -->
+    <path d="M16 110 L304 110 L274 30 L46 30 Z" fill="url(#accent)" stroke="none" />
+    <path d="M16 110 L46 30 M88 30 L80 110 M160 30 L160 110 M232 30 L240 110 M274 30 L304 110" stroke="#ffffff" stroke-width="12" />
+    
+    <!-- Canopy Scallops -->
+    <path d="M16 110 Q52 140 88 110 Q124 140 160 110 Q196 140 232 110 Q268 140 304 110" fill="none" stroke="#ffffff" stroke-width="14" />
+    
+    <!-- Shop Base / Register -->
+    <rect x="40" y="140" width="240" height="150" rx="20" stroke="#ffffff" stroke-width="18" fill="#042f2e" />
+    
+    <!-- Arabic Calligraphy T (ت) Accent / POS Screen -->
+    <rect x="70" y="165" width="180" height="90" rx="12" fill="url(#accent)" stroke="none" />
+    <!-- Two dots of Arabic letter Tā' (ت) -->
+    <circle cx="140" cy="195" r="10" fill="#ffffff" stroke="none" />
+    <circle cx="180" cy="195" r="10" fill="#ffffff" stroke="none" />
+    <!-- Smile arc -->
+    <path d="M130 225 Q160 245 190 225" stroke="#ffffff" stroke-width="8" stroke-linecap="round" fill="none" />
+  </g>
+</svg>

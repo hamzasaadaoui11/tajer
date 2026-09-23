@@ -1,0 +1,6 @@
+{
+  "name": "تاجر - نظام إدارة المتاجر والمبيعات",
+  "description": "تطبيق متكامل لإدارة المحلات التجارية ونقاط البيع POS والمخزون والديون والخزينة بالمغرب",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
