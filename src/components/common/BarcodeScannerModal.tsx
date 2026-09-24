@@ -20,12 +20,8 @@ const SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.EAN_13,
   Html5QrcodeSupportedFormats.EAN_8,
   Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.CODE_39,
   Html5QrcodeSupportedFormats.UPC_A,
   Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.ITF,
-  Html5QrcodeSupportedFormats.CODABAR,
-  Html5QrcodeSupportedFormats.QR_CODE,
 ];
 
 export const BarcodeScannerModal: React.FC = () => {
@@ -156,7 +152,7 @@ export const BarcodeScannerModal: React.FC = () => {
           scanner = new Html5Qrcode('reader-container', {
             formatsToSupport: SUPPORTED_FORMATS,
             verbose: false,
-            experimentalFeatures: { useBarCodeDetectorIfSupported: false },
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
           });
           scannerRef.current = scanner;
         }
@@ -208,7 +204,7 @@ export const BarcodeScannerModal: React.FC = () => {
           formatsToSupport: SUPPORTED_FORMATS,
           verbose: false,
           experimentalFeatures: {
-            useBarCodeDetectorIfSupported: false, // Prevents iOS Safari & Chrome WebRTC freezing
+            useBarCodeDetectorIfSupported: true, // Enables native, hardware-accelerated scanning on modern iOS (Safari) and Android
           },
         });
       }
@@ -433,7 +429,7 @@ export const BarcodeScannerModal: React.FC = () => {
             {/* Container for html5-qrcode video */}
             <div 
               id="reader-container" 
-              className="w-full h-full object-cover [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:rounded-2xl" 
+              className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain [&_video]:rounded-2xl" 
             />
 
             {/* Loading / Starting State */}
