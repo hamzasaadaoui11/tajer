@@ -53,9 +53,6 @@ const AppContent: React.FC = () => {
       {/* Top Application Header */}
       <Header />
 
-      {/* PWA Offline / Install Banner */}
-      <PWAInstallPrompt />
-
       {/* Main Body View */}
       <main className={`flex-1 w-full ${currentView === 'pos' ? 'overflow-hidden h-[calc(100vh-7.5rem)] pb-2 sm:pb-0' : 'overflow-y-auto pb-20'}`}>
         {currentView === 'dashboard' && <DashboardView />}

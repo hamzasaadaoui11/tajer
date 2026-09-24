@@ -141,6 +141,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem('tajer_remembered_email') || '';
   });
 
+  const [isOnboardingComplete, setIsOnboardingComplete] = useState<boolean>(() => {
+    return db.isOnboardingComplete();
+  });
+
+  const [lang, setLangState] = useState<Language>(() => {
+    return (localStorage.getItem('tajer_lang') as Language) || 'ar';
+  });
+
+  const [isDark, setIsDarkState] = useState<boolean>(() => {
+    return false;
+  });
+
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>(
+    navigator.onLine ? 'synced' : 'offline'
+  );
+
   // Synchronize state with URL hash
   const parseHash = (): AppView => {
     const hash = window.location.hash.replace(/^#\/?/, '');
@@ -472,20 +489,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuthEmail('');
   };
 
-  // 2. Localization
-  const [lang, setLangState] = useState<Language>(() => {
-    return (localStorage.getItem('tajer_lang') as Language) || 'ar';
-  });
-
-  const [isDark, setIsDarkState] = useState<boolean>(() => {
-    return false;
-  });
-
-  // 3. Online Status
-  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
-  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>(
-    navigator.onLine ? 'synced' : 'offline'
-  );
+  // 2. Localization and Online Status (moved to top of provider)
 
   useEffect(() => {
     const handleOnline = () => {
@@ -587,9 +591,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setIsDark = (val: boolean) => setIsDarkState(val);
   const toggleTheme = () => setIsDarkState(prev => !prev);
 
-  const [isOnboardingComplete, setIsOnboardingComplete] = useState<boolean>(() => {
-    return db.isOnboardingComplete();
-  });
+  // Onboarding status (moved to top of provider)
 
   const completeOnboarding = (bizData: Partial<Business>, userData?: Partial<User>) => {
     const updatedBiz = { ...business, ...bizData };

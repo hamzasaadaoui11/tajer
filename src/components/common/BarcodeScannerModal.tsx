@@ -214,14 +214,14 @@ export const BarcodeScannerModal: React.FC = () => {
       }
 
       const scanConfig = {
-        fps: 12,
+        fps: 20, // Increased from 12 to 20 for faster, sharper frames on iOS
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const boxWidth = Math.floor(viewfinderWidth * 0.88);
-          const boxHeight = Math.floor(minEdge * 0.65);
+          // Wider box for EAN/UPC barcodes so they don't get clipped
+          const boxWidth = Math.floor(viewfinderWidth * 0.90);
+          const boxHeight = Math.floor(viewfinderHeight * 0.52);
           return {
-            width: Math.min(Math.max(boxWidth, 180), 340),
-            height: Math.min(Math.max(boxHeight, 90), 220),
+            width: Math.min(Math.max(boxWidth, 240), 380),
+            height: Math.min(Math.max(boxHeight, 100), 200),
           };
         },
         disableFlip: false,
@@ -229,18 +229,41 @@ export const BarcodeScannerModal: React.FC = () => {
 
       const scanner = scannerRef.current;
 
-      // Strategy A: Start with facingMode directly
+      // Prepare optimized constraints for iOS Safari / Chrome
+      const cameraConstraints = {
+        facingMode: facing,
+        width: { min: 640, ideal: 1280, max: 1920 }, // Force 720p/1080p stream for ultra sharp barcode details
+        height: { min: 480, ideal: 720, max: 1080 },
+        focusMode: 'continuous' as any
+      };
+
+      // Strategy A: Start with facingMode & high resolution constraints directly
       let started = false;
       try {
         await scanner.start(
-          { facingMode: facing },
+          cameraConstraints,
           scanConfig,
           (decodedText) => handleBarcodeFound(decodedText),
           () => {}
         );
         started = true;
       } catch (errMode: any) {
-        console.warn('FacingMode start error, trying device enumeration:', errMode);
+        console.warn('FacingMode start error, trying standard facingMode:', errMode);
+      }
+
+      // Fallback Strategy A.1: Start with simpler facingMode if constraints are rejected
+      if (!started) {
+        try {
+          await scanner.start(
+            { facingMode: facing },
+            scanConfig,
+            (decodedText) => handleBarcodeFound(decodedText),
+            () => {}
+          );
+          started = true;
+        } catch (errFallback: any) {
+          console.warn('Fallback facingMode failed:', errFallback);
+        }
       }
 
       // Strategy B: If facingMode failed, enumerate device cameras
@@ -261,7 +284,7 @@ export const BarcodeScannerModal: React.FC = () => {
         }
       }
 
-      // Strategy C: Final fallback to other camera
+      // Strategy C: Final fallback to user camera
       if (!started && facing === 'environment') {
         await scanner.start(
           { facingMode: 'user' },
@@ -513,6 +536,24 @@ export const BarcodeScannerModal: React.FC = () => {
                 >
                   {lang === 'ar' ? 'تجاهل' : 'Ignorer'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Pro iPhone/Android Camera Tip */}
+          {cameraActive && !isScannerPaused && (
+            <div className="p-2.5 rounded-xl bg-teal-500/10 border border-teal-500/20 text-[11px] text-teal-800 dark:text-teal-200 flex items-start gap-1.5 leading-relaxed">
+              <span className="shrink-0 text-xs">💡</span>
+              <div>
+                {lang === 'ar' ? (
+                  <>
+                    <strong>نصيحة للآيفون:</strong> أبعد الهاتف قليلاً عن السلعة (حوالي 25-30 سم) لكي توضح الكاميرا (Focus)، أو اضغط على زر 📷 بالأسفل لالتقاط صورة للباركود مباشرة!
+                  </>
+                ) : (
+                  <>
+                    <strong>Astuce iPhone :</strong> Éloignez le téléphone de la marchandise (25-30 cm) pour que l'appareil puisse faire la mise au point, ou cliquez sur le bouton 📷 en bas pour prendre une photo directe.
+                  </>
+                )}
               </div>
             </div>
           )}
