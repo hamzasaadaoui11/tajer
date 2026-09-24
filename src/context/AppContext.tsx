@@ -11,7 +11,7 @@ import {
 } from '../types';
 import { translations, Language, formatMAD } from '../i18n/locales';
 import { db } from '../services/db';
-import { getSupabase } from '../services/supabase';
+import { getSupabase, isSupabaseConfigured } from '../services/supabase';
 import { syncEngine } from '../services/sync';
 
 export type AppView = 
@@ -521,11 +521,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } else {
         setSyncStatus(navigator.onLine ? 'synced' : 'offline');
-        if (res.errors && res.errors.length > 0) {
-          console.error('Sync errors:', res.errors);
+        const fatalErrors = (res.errors || []).filter(
+          err => !err.includes('المزامنة جارية') && !err.includes('Synchronisation en cours')
+        );
+        if (fatalErrors.length > 0) {
+          console.error('Sync errors:', fatalErrors);
           alert(
             (lang === 'ar' ? 'فشلت المزامنة بسبب الأخطاء التالية من Supabase (غالباً RLS أو جداول ناقصة):\n\n' : 'Échec de synchronisation (Erreurs Supabase/RLS) :\n\n') + 
-            res.errors.join('\n')
+            fatalErrors.join('\n')
           );
         }
       }
@@ -539,6 +542,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    // Debounced sync runner to avoid hammering Supabase or stacking calls
+    let lastSyncTime = 0;
+    const runDebouncedSync = () => {
+      const now = Date.now();
+      if (now - lastSyncTime < 3000) return;
+      lastSyncTime = now;
+      if (navigator.onLine) {
+        syncEngine.syncAll().then(res => {
+          if (res.success && res.processed > 0) setDataVersion(v => v + 1);
+        }).catch(() => {});
+      }
+    };
+
     // 1. Initial cleanup and sync after login
     db.cleanupDemoContacts(business.id);
     syncEngine.syncAll().then(res => {
@@ -546,22 +562,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.success) setDataVersion(v => v + 1);
     }).catch(() => {});
 
-    // 2. Periodic sync every 5 seconds for fast multi-PC synchronization
+    // 2. Periodic sync every 10 seconds for fast multi-PC synchronization
     const interval = setInterval(() => {
-      if (navigator.onLine) {
-        syncEngine.syncAll().then(res => {
-          if (res.success && res.processed > 0) setDataVersion(v => v + 1);
-        }).catch(() => {});
-      }
-    }, 5000);
+      runDebouncedSync();
+    }, 10000);
 
     // 3. Sync on app focus / tab switch / resume
     const handleResumeOrFocus = () => {
-      if (navigator.onLine) {
-        syncEngine.syncAll().then(res => {
-          if (res.success) setDataVersion(v => v + 1);
-        }).catch(() => {});
-      }
+      runDebouncedSync();
     };
 
     window.addEventListener('focus', handleResumeOrFocus);
@@ -573,11 +581,113 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     document.addEventListener('visibilitychange', handleVisibility);
 
+    // 4. Realtime subscription for instant multi-device synchronization
+    const supabase = getSupabase();
+    let realtimeChannel: any = null;
+    if (supabase && isSupabaseConfigured()) {
+      try {
+        realtimeChannel = supabase
+          .channel('tajer_realtime_db')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'products' },
+            (payload: any) => {
+              if (payload.eventType === 'DELETE') {
+                const deletedId = payload.old?.id;
+                if (deletedId) {
+                  db.removeProductLocally(deletedId);
+                  setDataVersion(v => v + 1);
+                }
+                runDebouncedSync();
+              } else if (payload.eventType === 'UPDATE') {
+                if (payload.new && payload.new.is_active === false) {
+                  db.removeProductLocally(payload.new.id);
+                  setDataVersion(v => v + 1);
+                } else {
+                  runDebouncedSync();
+                }
+              } else {
+                runDebouncedSync();
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'deleted_records' },
+            (payload: any) => {
+              if (payload.new) {
+                const { table_name, record_id } = payload.new;
+                if (table_name === 'products') {
+                  db.removeProductLocally(record_id);
+                } else if (table_name === 'categories') {
+                  db.removeCategoryLocally(record_id);
+                } else if (table_name === 'customers') {
+                  db.removeCustomerLocally(record_id);
+                } else if (table_name === 'suppliers') {
+                  db.removeSupplierLocally(record_id);
+                }
+                setDataVersion(v => v + 1);
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'categories' },
+            (payload: any) => {
+              if (payload.eventType === 'DELETE' && payload.old?.id) {
+                db.removeCategoryLocally(payload.old.id);
+                setDataVersion(v => v + 1);
+              }
+              runDebouncedSync();
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'customers' },
+            (payload: any) => {
+              if (payload.eventType === 'DELETE' && payload.old?.id) {
+                db.removeCustomerLocally(payload.old.id);
+                setDataVersion(v => v + 1);
+              }
+              runDebouncedSync();
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'suppliers' },
+            (payload: any) => {
+              if (payload.eventType === 'DELETE' && payload.old?.id) {
+                db.removeSupplierLocally(payload.old.id);
+                setDataVersion(v => v + 1);
+              }
+              runDebouncedSync();
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'sales' },
+            () => {
+              runDebouncedSync();
+            }
+          )
+          .subscribe();
+      } catch (e) {
+        console.warn('Realtime subscription notice:', e);
+      }
+    }
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', handleResumeOrFocus);
       window.removeEventListener('online', handleResumeOrFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
+      if (realtimeChannel && supabase) {
+        try {
+          supabase.removeChannel(realtimeChannel);
+        } catch {
+          // ignore
+        }
+      }
     };
   }, [isAuthenticated]);
 

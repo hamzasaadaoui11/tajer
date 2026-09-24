@@ -166,7 +166,7 @@ export const ProductsView: React.FC = () => {
   const marginPercent = pCost > 0 ? ((profitMargin / pCost) * 100).toFixed(1) : '100';
 
   // Save product
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       alert(lang === 'ar' ? 'يرجى كتابة اسم المنتج' : 'Veuillez saisir le nom du produit');
@@ -197,8 +197,8 @@ export const ProductsView: React.FC = () => {
       updated_at: new Date().toISOString(),
     };
 
-    db.saveProduct(prodData, user.name);
     setIsModalOpen(false);
+    await syncEngine.saveProductEverywhere(prodData, user.name);
     refreshData();
     syncEngine.syncAll().then(refreshData).catch(() => {});
   };
@@ -946,11 +946,14 @@ export const ProductsView: React.FC = () => {
                 {lang === 'ar' ? 'إلغاء' : 'Annuler'}
               </button>
               <button
-                onClick={() => {
-                  db.deleteProduct(deleteConfirmProduct.id, business.id, user.name);
-                  setDeleteConfirmProduct(null);
-                  refreshData();
-                  syncEngine.syncAll().then(refreshData).catch(() => {});
+                onClick={async () => {
+                  if (deleteConfirmProduct) {
+                    const toDelete = deleteConfirmProduct;
+                    setDeleteConfirmProduct(null);
+                    await syncEngine.deleteProductEverywhere(toDelete.id, business.id, user.name);
+                    refreshData();
+                    syncEngine.syncAll().then(refreshData).catch(() => {});
+                  }
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition cursor-pointer select-none"
               >

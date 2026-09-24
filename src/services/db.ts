@@ -166,6 +166,83 @@ class LocalDatabase {
     }
   }
 
+  // --- Pending Local Creates (items created locally while offline) ---
+  public addPendingCreate(collection: string, id: string): void {
+    try {
+      const key = `${this.getPrefix()}pending_create_${collection}`;
+      const list: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!list.includes(id)) {
+        list.push(id);
+        localStorage.setItem(key, JSON.stringify(list));
+      }
+    } catch (e) {
+      console.error(`Failed to add pending create for ${collection}`, e);
+    }
+  }
+
+  public getPendingCreates(collection: string): string[] {
+    try {
+      const key = `${this.getPrefix()}pending_create_${collection}`;
+      return JSON.parse(localStorage.getItem(key) || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  public removePendingCreate(collection: string, id: string): void {
+    try {
+      const key = `${this.getPrefix()}pending_create_${collection}`;
+      const list: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      const filtered = list.filter(item => item !== id);
+      localStorage.setItem(key, JSON.stringify(filtered));
+    } catch (e) {
+      console.error(`Failed to remove pending create for ${collection}`, e);
+    }
+  }
+
+  public clearPendingCreates(collection: string, ids: string[]): void {
+    try {
+      const key = `${this.getPrefix()}pending_create_${collection}`;
+      const list: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      const filtered = list.filter(id => !ids.includes(id));
+      localStorage.setItem(key, JSON.stringify(filtered));
+    } catch (e) {
+      console.error(`Failed to clear pending creates for ${collection}`, e);
+    }
+  }
+
+  public removeProductLocally(id: string): void {
+    const list = this.get<Product>('products');
+    this.set('products', list.filter(p => p.id !== id));
+    this.addToTombstones('products', id);
+    this.removeSyncedId('products', id);
+    this.removePendingCreate('products', id);
+  }
+
+  public removeCategoryLocally(id: string): void {
+    const list = this.get<Category>('categories');
+    this.set('categories', list.filter(c => c.id !== id));
+    this.addToTombstones('categories', id);
+    this.removeSyncedId('categories', id);
+    this.removePendingCreate('categories', id);
+  }
+
+  public removeCustomerLocally(id: string): void {
+    const list = this.get<Customer>('customers');
+    this.set('customers', list.filter(c => c.id !== id));
+    this.addToTombstones('customers', id);
+    this.removeSyncedId('customers', id);
+    this.removePendingCreate('customers', id);
+  }
+
+  public removeSupplierLocally(id: string): void {
+    const list = this.get<Supplier>('suppliers');
+    this.set('suppliers', list.filter(s => s.id !== id));
+    this.addToTombstones('suppliers', id);
+    this.removeSyncedId('suppliers', id);
+    this.removePendingCreate('suppliers', id);
+  }
+
   // --- Initial Setup & Verification ---
   public initialize(customUser?: { id?: string; email?: string; name?: string }): { business: Business; branch: Branch; user: User } {
     let businesses = this.get<Business>('businesses');
@@ -387,6 +464,8 @@ class LocalDatabase {
     this.set('categories', list);
     this.addToDeleteQueue('categories', id);
     this.addToTombstones('categories', id);
+    this.removeSyncedId('categories', id);
+    this.removePendingCreate('categories', id);
   }
 
   // --- Products ---
@@ -475,6 +554,8 @@ class LocalDatabase {
       this.set('products', list.filter(p => p.id !== id));
       this.addToDeleteQueue('products', id);
       this.addToTombstones('products', id);
+      this.removeSyncedId('products', id);
+      this.removePendingCreate('products', id);
       this.addAuditLog(businessId, userName, 'حذف منتج', `حذف المنتج: ${prod.name}`);
     }
   }
@@ -499,6 +580,8 @@ class LocalDatabase {
     this.set('customers', this.get<Customer>('customers').filter(c => c.id !== id));
     this.addToDeleteQueue('customers', id);
     this.addToTombstones('customers', id);
+    this.removeSyncedId('customers', id);
+    this.removePendingCreate('customers', id);
   }
 
   // --- Suppliers ---
@@ -521,6 +604,8 @@ class LocalDatabase {
     this.set('suppliers', this.get<Supplier>('suppliers').filter(s => s.id !== id));
     this.addToDeleteQueue('suppliers', id);
     this.addToTombstones('suppliers', id);
+    this.removeSyncedId('suppliers', id);
+    this.removePendingCreate('suppliers', id);
   }
 
   // --- Purge any default mock customers/suppliers ---

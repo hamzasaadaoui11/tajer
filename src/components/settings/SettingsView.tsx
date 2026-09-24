@@ -12,9 +12,15 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
-  Check
+  Check,
+  Database,
+  Copy,
+  ExternalLink,
+  RefreshCw,
+  Cloud
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { syncEngine } from '../../services/sync';
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -26,10 +32,14 @@ export const SettingsView: React.FC = () => {
     toggleTheme, 
     lang,
     logout,
-    authEmail
+    authEmail,
+    refreshData,
+    triggerSync,
+    syncStatus
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'store' | 'general'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'general' | 'cloud'>('store');
+  const [copiedSql, setCopiedSql] = useState(false);
   const [storeSection, setStoreSection] = useState<'branding' | 'general' | 'legal' | 'footer'>('branding');
 
   // Business form state
@@ -169,6 +179,15 @@ export const SettingsView: React.FC = () => {
             >
               <Globe className="w-4 h-4" />
               <span>{lang === 'ar' ? 'المظهر واللغة' : 'Apparence & Langue'}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('cloud')}
+              className={`px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 ${
+                activeTab === 'cloud' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
+              }`}
+            >
+              <Database className="w-4 h-4" />
+              <span>{lang === 'ar' ? 'السحابة و SQL' : 'Cloud & SQL'}</span>
             </button>
           </div>
         </div>
@@ -725,6 +744,210 @@ export const SettingsView: React.FC = () => {
                   : (theme === 'dark' ? 'Passer au mode Clair' : 'Passer au mode Sombre')}
               </span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Cloud & SQL */}
+      {activeTab === 'cloud' && (
+        <div className={`bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6 max-w-3xl ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <div className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-teal-600" />
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                  {lang === 'ar' ? 'إعدادات المزامنة السحابية وقاعدة البيانات (Supabase)' : 'Synchronisation Cloud & Base de données (Supabase)'}
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {lang === 'ar'
+                  ? 'حل مشكلة اختفاء وتزامن المنتجات المحذوفة فورياً بين عدة هواتف وحواسيب'
+                  : 'Correction de la synchronisation instantanée des suppressions entre plusieurs appareils'}
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                triggerSync();
+                refreshData();
+              }}
+              disabled={syncStatus === 'syncing'}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-bold text-xs hover:bg-teal-100 dark:hover:bg-teal-900/50 transition cursor-pointer self-start sm:self-auto shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+              <span>{lang === 'ar' ? 'تحديث المزامنة الآن' : 'Synchroniser maintenant'}</span>
+            </button>
+          </div>
+
+          {/* Quick Steps Guide */}
+          <div className="bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-800/80 rounded-2xl p-4 text-xs space-y-2.5">
+            <h4 className="font-bold text-teal-950 dark:text-teal-200 flex items-center gap-1.5">
+              <span>⚡</span>
+              <span>{lang === 'ar' ? 'كيف تجعل الحذف ينعكس فورياً بين جهاز X وجهاز Y؟' : 'Comment activer la suppression instantanée multi-appareils ?'}</span>
+            </h4>
+            <ol className="list-decimal list-inside space-y-1.5 text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+              <li>{lang === 'ar' ? 'انسخ كود SQL من الزر الأخضر بالأسفل.' : 'Copiez le code SQL via le bouton ci-dessous.'}</li>
+              <li>{lang === 'ar' ? 'ادخل إلى لوحة تحكم Supabase وافتح SQL Editor من القائمة الجانبية.' : 'Allez sur votre tableau de bord Supabase et ouvrez SQL Editor.'}</li>
+              <li>{lang === 'ar' ? 'انقر على "New query"، الصق الكود واضغط على زر "Run".' : 'Cliquez sur "New query", collez le code et cliquez sur "Run".'}</li>
+              <li>{lang === 'ar' ? 'تم! بمجرد حذف أي منتج في أي جهاز، سيختفي فورياً من باقي الأجهزة.' : 'Terminé ! Toute suppression sera instantanément répercutée.'}</li>
+            </ol>
+          </div>
+
+          {/* SQL Code Box with Copy Button */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                {lang === 'ar' ? 'كود SQL للإصلاح وتفعيل Realtime و Replica Identity:' : 'Script SQL pour activer le Realtime & Replica Identity :'}
+              </span>
+              <button
+                onClick={() => {
+                  const sqlCode = `-- ====================================================================
+-- حل مشكلة مزامنة الحذف والـ Realtime بين الأجهزة (TAJER REALTIME & DELETE FIX)
+-- ====================================================================
+
+-- 1. تمكين REPLICA IDENTITY FULL (ضروري لكي يرسل Supabase بيانات العنصر المحذوف)
+ALTER TABLE IF EXISTS public.products REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.categories REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.customers REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.suppliers REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.sales REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.expenses REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.stock_movements REPLICA IDENTITY FULL;
+
+-- 2. تفعيل الـ Realtime للبث الفوري بين الأجهزة
+DO $$
+BEGIN
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.products; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.categories; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.customers; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.suppliers; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.sales; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.expenses; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.stock_movements; EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
+
+-- 3. إنشاء جدول السجلات المحذوفة (deleted_records)
+CREATE TABLE IF NOT EXISTS public.deleted_records (
+    id TEXT PRIMARY KEY,
+    table_name TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    business_id TEXT NOT NULL,
+    deleted_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_del_rec_biz ON public.deleted_records (business_id, table_name);
+ALTER TABLE public.deleted_records ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all anon and auth deleted_records" ON public.deleted_records;
+CREATE POLICY "Allow all anon and auth deleted_records" ON public.deleted_records FOR ALL TO public USING (true) WITH CHECK (true);
+ALTER TABLE public.deleted_records REPLICA IDENTITY FULL;
+DO $$
+BEGIN
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.deleted_records; EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
+
+-- 4. مشغل قاعدة البيانات التلقائي للحذف
+CREATE OR REPLACE FUNCTION public.handle_tajer_record_deletion()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.deleted_records (id, table_name, record_id, business_id, deleted_at)
+    VALUES (
+        'del-' || TG_TABLE_NAME || '-' || OLD.id || '-' || extract(epoch from clock_timestamp())::bigint,
+        TG_TABLE_NAME,
+        OLD.id,
+        COALESCE(OLD.business_id, 'default'),
+        NOW()
+    )
+    ON CONFLICT (id) DO NOTHING;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_tajer_delete_product ON public.products;
+CREATE TRIGGER trg_tajer_delete_product AFTER DELETE ON public.products FOR EACH ROW EXECUTE FUNCTION public.handle_tajer_record_deletion();
+
+DROP TRIGGER IF EXISTS trg_tajer_delete_category ON public.categories;
+CREATE TRIGGER trg_tajer_delete_category AFTER DELETE ON public.categories FOR EACH ROW EXECUTE FUNCTION public.handle_tajer_record_deletion();
+
+DROP TRIGGER IF EXISTS trg_tajer_delete_customer ON public.customers;
+CREATE TRIGGER trg_tajer_delete_customer AFTER DELETE ON public.customers FOR EACH ROW EXECUTE FUNCTION public.handle_tajer_record_deletion();
+
+DROP TRIGGER IF EXISTS trg_tajer_delete_supplier ON public.suppliers;
+CREATE TRIGGER trg_tajer_delete_supplier AFTER DELETE ON public.suppliers FOR EACH ROW EXECUTE FUNCTION public.handle_tajer_record_deletion();
+
+-- 5. تجديد سياسات الـ RLS للحذف والقراءة والكتابة
+DO $$
+DECLARE
+    tbl text;
+BEGIN
+    FOR tbl IN 
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+          AND table_name IN (
+            'businesses', 'branches', 'users', 'categories', 'products', 
+            'customers', 'suppliers', 'sales', 'sale_returns', 'purchases', 
+            'purchase_returns', 'expenses', 'cash_transactions', 
+            'payment_transactions', 'stock_movements', 'deleted_records'
+          )
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', 'Allow all anon and auth ' || tbl, tbl);
+        EXECUTE format('CREATE POLICY %I ON public.%I FOR ALL TO public USING (true) WITH CHECK (true);', 'Allow all anon and auth ' || tbl, tbl);
+    END LOOP;
+END $$;`;
+
+                  navigator.clipboard.writeText(sqlCode);
+                  setCopiedSql(true);
+                  setTimeout(() => setCopiedSql(false), 3000);
+                }}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer shadow-xs ${
+                  copiedSql 
+                    ? 'bg-emerald-600 text-white' 
+                    : 'bg-teal-600 hover:bg-teal-700 text-white'
+                }`}
+              >
+                {copiedSql ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{lang === 'ar' ? 'تم النسخ بنجاح!' : 'Copié !'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>{lang === 'ar' ? 'نسخ كود SQL كاملاً' : 'Copier le script SQL'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="relative rounded-2xl bg-slate-950 p-4 border border-slate-800 text-slate-300 font-mono text-[11px] leading-relaxed max-h-64 overflow-y-auto ltr text-left dir-ltr">
+              <pre className="select-all whitespace-pre-wrap">
+{`-- 1. تمكين REPLICA IDENTITY FULL للمنتجات والجداول
+ALTER TABLE IF EXISTS public.products REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.categories REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.customers REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.suppliers REPLICA IDENTITY FULL;
+
+-- 2. إضافة الجداول إلى قناة البث الفوري Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.categories;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.customers;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.suppliers;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.sales;
+
+-- 3. جدول السجلات المحذوفة والمشغل التلقائي
+CREATE TABLE IF NOT EXISTS public.deleted_records (
+    id TEXT PRIMARY KEY,
+    table_name TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    business_id TEXT NOT NULL,
+    deleted_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.deleted_records ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all anon and auth deleted_records" ON public.deleted_records FOR ALL TO public USING (true) WITH CHECK (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE public.deleted_records;
+ALTER TABLE public.deleted_records REPLICA IDENTITY FULL;`}
+              </pre>
+            </div>
           </div>
         </div>
       )}

@@ -2,9 +2,6 @@ import React, { useState } from 'react';
 import { 
   Store, 
   Bell, 
-  Wifi, 
-  WifiOff, 
-  RefreshCw, 
   ChevronDown, 
   User as UserIcon, 
   Globe, 
@@ -30,8 +27,6 @@ export const Header: React.FC = () => {
     t,
     isDark,
     setIsDark,
-    syncStatus,
-    triggerSync,
     notifications,
     unreadNotifsCount,
     markNotificationRead,
@@ -114,28 +109,8 @@ export const Header: React.FC = () => {
           )}
         </div>
 
-        {/* Left side in RTL (Controls, Sync, Notifications, Profile) */}
+        {/* Left side in RTL (Controls, Notifications, Profile) */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          
-          {/* Sync & Offline Status Indicator */}
-          <button
-            onClick={triggerSync}
-            title={t('syncStatus')}
-            className={`flex items-center gap-1 p-1.5 sm:px-2.5 sm:py-1.5 rounded-full text-xs font-medium transition cursor-pointer ${
-              syncStatus === 'synced'
-                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                : syncStatus === 'syncing'
-                ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
-                : 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
-            }`}
-          >
-            {syncStatus === 'synced' && <Wifi className="w-3.5 h-3.5" />}
-            {syncStatus === 'syncing' && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-            {syncStatus === 'offline' && <WifiOff className="w-3.5 h-3.5" />}
-            <span className="hidden md:inline">
-              {syncStatus === 'synced' ? t('synced') : syncStatus === 'syncing' ? t('syncing') : t('offline')}
-            </span>
-          </button>
 
           {/* Notifications Bell */}
           <div className="relative">

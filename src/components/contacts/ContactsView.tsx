@@ -17,6 +17,7 @@ import { db } from '../../services/db';
 import { Customer, Supplier } from '../../types';
 import { formatMAD } from '../../i18n/locales';
 import { getSupabase } from '../../services/supabase';
+import { syncEngine } from '../../services/sync';
 
 interface ContactsViewProps {
   initialType?: 'customers' | 'suppliers';
@@ -657,28 +658,13 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
               <button
                 onClick={async () => {
                   if (deleteConfirm.type === 'customer') {
-                    db.deleteCustomer(deleteConfirm.id);
-                    const supabase = getSupabase();
-                    if (supabase) {
-                      try {
-                        await supabase.from('customers').delete().eq('id', deleteConfirm.id);
-                      } catch (e) {
-                        console.warn('Delete customer from cloud notice:', e);
-                      }
-                    }
+                    await syncEngine.deleteCustomerEverywhere(deleteConfirm.id, business.id);
                   } else {
-                    db.deleteSupplier(deleteConfirm.id);
-                    const supabase = getSupabase();
-                    if (supabase) {
-                      try {
-                        await supabase.from('suppliers').delete().eq('id', deleteConfirm.id);
-                      } catch (e) {
-                        console.warn('Delete supplier from cloud notice:', e);
-                      }
-                    }
+                    await syncEngine.deleteSupplierEverywhere(deleteConfirm.id, business.id);
                   }
                   setDeleteConfirm(null);
                   refreshData();
+                  syncEngine.syncAll().then(refreshData).catch(() => {});
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition cursor-pointer select-none"
               >

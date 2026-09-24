@@ -284,13 +284,81 @@ BEGIN
             'businesses', 'branches', 'users', 'categories', 'products', 
             'customers', 'suppliers', 'sales', 'sale_returns', 'purchases', 
             'purchase_returns', 'expenses', 'cash_transactions', 
-            'payment_transactions', 'stock_movements'
+            'payment_transactions', 'stock_movements', 'deleted_records'
           )
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
         EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', 'Allow all anon and auth ' || tbl, tbl);
         EXECUTE format('CREATE POLICY %I ON public.%I FOR ALL USING (true) WITH CHECK (true);', 'Allow all anon and auth ' || tbl, tbl);
     END LOOP;
+END $$;
+
+-- ====================================================================
+-- DELETED RECORDS TOMBSTONE TABLE & TRIGGERS FOR MULTI-DEVICE SYNC
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS public.deleted_records (
+    id TEXT PRIMARY KEY,
+    table_name TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    business_id TEXT NOT NULL,
+    deleted_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_del_rec_biz ON public.deleted_records (business_id, table_name);
+
+CREATE OR REPLACE FUNCTION public.handle_tajer_record_deletion()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.deleted_records (id, table_name, record_id, business_id, deleted_at)
+    VALUES (
+        'del-' || TG_TABLE_NAME || '-' || OLD.id || '-' || extract(epoch from clock_timestamp())::bigint,
+        TG_TABLE_NAME,
+        OLD.id,
+        COALESCE(OLD.business_id, 'default'),
+        NOW()
+    )
+    ON CONFLICT (id) DO NOTHING;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_tajer_delete_product ON public.products;
+CREATE TRIGGER trg_tajer_delete_product AFTER DELETE ON public.products FOR EACH ROW EXECUTE FUNCTION public.handle_tajer_record_deletion();
+
+DROP TRIGGER IF EXISTS trg_tajer_delete_category ON public.categories;
+CREATE TRIGGER trg_tajer_delete_category AFTER DELETE ON public.categories FOR EACH ROW EXECUTE FUNCTION public.handle_tajer_record_deletion();
+
+DROP TRIGGER IF EXISTS trg_tajer_delete_customer ON public.customers;
+CREATE TRIGGER trg_tajer_delete_customer AFTER DELETE ON public.customers FOR EACH ROW EXECUTE FUNCTION public.handle_tajer_record_deletion();
+
+DROP TRIGGER IF EXISTS trg_tajer_delete_supplier ON public.suppliers;
+CREATE TRIGGER trg_tajer_delete_supplier AFTER DELETE ON public.suppliers FOR EACH ROW EXECUTE FUNCTION public.handle_tajer_record_deletion();
+
+-- ====================================================================
+-- REPLICA IDENTITY FULL & REALTIME PUBLICATION SETUP
+-- ====================================================================
+ALTER TABLE IF EXISTS public.products REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.categories REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.customers REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.suppliers REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.sales REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.sale_returns REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.purchases REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.expenses REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.cash_transactions REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.payment_transactions REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.stock_movements REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS public.deleted_records REPLICA IDENTITY FULL;
+
+DO $$
+BEGIN
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.products; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.categories; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.customers; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.suppliers; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.sales; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.expenses; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.stock_movements; EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.deleted_records; EXCEPTION WHEN duplicate_object THEN NULL; END;
 END $$;
 
 -- ====================================================================
