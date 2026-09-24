@@ -58,16 +58,28 @@ class SyncEngine {
             if (deletedCategories.includes(c.id)) return false;
             if (db.isTombstoned('categories', c.id)) return false;
             // If synced before but not on remote, it was deleted on another device
-            if (syncedCatIds.has(c.id) && !remoteIds.has(c.id)) return false;
+            if (syncedCatIds.has(c.id) && !remoteIds.has(c.id)) {
+              processed++;
+              return false;
+            }
             return true;
           });
 
-          db.set('categories', filteredLocal);
+          if (filteredLocal.length !== localCats.length) {
+            db.set('categories', filteredLocal);
+            processed++;
+          }
 
           // Save/update remote categories locally
           for (const rc of remoteCategories) {
             if (deletedCategories.includes(rc.id)) continue;
             if (db.isTombstoned('categories', rc.id)) continue;
+
+            const existing = localCats.find(lc => lc.id === rc.id);
+            if (!existing || existing.name !== rc.name || existing.color !== rc.color) {
+              processed++;
+            }
+
             db.saveCategory({
               id: rc.id,
               business_id: rc.business_id,
@@ -97,21 +109,42 @@ class SyncEngine {
           const deletedProducts = db.getDeleteQueue('products');
 
           // Filter local products: remove if deleted on another device
-          const localProds = db.getProducts(bizId, branchId);
+          const localProds = db.getProducts(bizId);
           const filteredLocal = localProds.filter(p => {
             if (deletedProducts.includes(p.id)) return false;
             if (db.isTombstoned('products', p.id)) return false;
             // If synced before but not on remote, it was deleted on another device
-            if (syncedProdIds.has(p.id) && !remoteIds.has(p.id)) return false;
+            if (syncedProdIds.has(p.id) && !remoteIds.has(p.id)) {
+              processed++;
+              return false;
+            }
             return true;
           });
 
-          db.set('products', filteredLocal);
+          if (filteredLocal.length !== localProds.length) {
+            db.set('products', filteredLocal);
+            processed++;
+          }
 
           // Save/update remote products locally
           for (const rp of remoteProducts) {
             if (deletedProducts.includes(rp.id)) continue;
             if (db.isTombstoned('products', rp.id)) continue;
+
+            const existing = localProds.find(lp => lp.id === rp.id);
+            if (!existing || 
+                existing.name !== rp.name || 
+                existing.current_stock !== Number(rp.current_stock) || 
+                existing.sale_price !== Number(rp.sale_price) || 
+                existing.purchase_price !== Number(rp.purchase_price) || 
+                existing.barcode !== rp.barcode ||
+                existing.sku !== rp.sku ||
+                existing.category_id !== rp.category_id ||
+                existing.is_active !== (rp.is_active !== false)
+            ) {
+              processed++;
+            }
+
             db.saveProduct({
               id: rp.id,
               business_id: rp.business_id,
@@ -169,23 +202,36 @@ class SyncEngine {
             if (deletedCustomers.includes(c.id)) return false;
             if (db.isTombstoned('customers', c.id)) return false;
             // If synced before but not on remote, it was deleted on another device
-            if (syncedCustIds.has(c.id) && !remoteIds.has(c.id)) return false;
+            if (syncedCustIds.has(c.id) && !remoteIds.has(c.id)) {
+              processed++;
+              return false;
+            }
             return true;
           });
 
-          db.set('customers', filteredLocal);
+          if (filteredLocal.length !== localCusts.length) {
+            db.set('customers', filteredLocal);
+            processed++;
+          }
 
           const forbiddenCustNames = new Set([
             'السيد أحمد الإدريسي',
             'السيدة فاطمة الزهراء العلوي',
             'مقهى الأندلس (السيد رشيد)'
           ]);
+
           for (const rc of remoteCustomers) {
             if (['cust-1', 'cust-2', 'cust-3'].includes(rc.id) || forbiddenCustNames.has(rc.name)) {
               continue;
             }
             if (deletedCustomers.includes(rc.id)) continue;
             if (db.isTombstoned('customers', rc.id)) continue;
+
+            const existing = localCusts.find(lc => lc.id === rc.id);
+            if (!existing || existing.name !== rc.name || existing.phone !== rc.phone || existing.total_debt !== Number(rc.total_debt)) {
+              processed++;
+            }
+
             db.saveCustomer({
               id: rc.id,
               business_id: rc.business_id,
@@ -238,11 +284,17 @@ class SyncEngine {
             if (deletedSuppliers.includes(s.id)) return false;
             if (db.isTombstoned('suppliers', s.id)) return false;
             // If synced before but not on remote, it was deleted on another device
-            if (syncedSuppIds.has(s.id) && !remoteIds.has(s.id)) return false;
+            if (syncedSuppIds.has(s.id) && !remoteIds.has(s.id)) {
+              processed++;
+              return false;
+            }
             return true;
           });
 
-          db.set('suppliers', filteredLocal);
+          if (filteredLocal.length !== localSupps.length) {
+            db.set('suppliers', filteredLocal);
+            processed++;
+          }
 
           const forbiddenSuppNames = new Set([
             'شركة توزيع الألبان المركزية',
@@ -255,6 +307,12 @@ class SyncEngine {
             }
             if (deletedSuppliers.includes(rs.id)) continue;
             if (db.isTombstoned('suppliers', rs.id)) continue;
+
+            const existing = localSupps.find(ls => ls.id === rs.id);
+            if (!existing || existing.name !== rs.name || existing.phone !== rs.phone || existing.total_debt !== Number(rs.total_debt)) {
+              processed++;
+            }
+
             db.saveSupplier({
               id: rs.id,
               business_id: rs.business_id,
@@ -287,8 +345,9 @@ class SyncEngine {
         if (!error) {
           db.clearDeleteQueue('products', deletedProducts);
           processed += deletedProducts.length;
-        } else if (!error.message.includes('does not exist')) {
+        } else {
           console.warn('Error syncing deleted products:', error.message);
+          errors.push(`حذف المنتجات: ${error.message}`);
         }
       }
 
@@ -298,8 +357,9 @@ class SyncEngine {
         if (!error) {
           db.clearDeleteQueue('categories', deletedCategories);
           processed += deletedCategories.length;
-        } else if (!error.message.includes('does not exist')) {
+        } else {
           console.warn('Error syncing deleted categories:', error.message);
+          errors.push(`حذف الفئات: ${error.message}`);
         }
       }
 
@@ -309,8 +369,9 @@ class SyncEngine {
         if (!error) {
           db.clearDeleteQueue('customers', deletedCustomers);
           processed += deletedCustomers.length;
-        } else if (!error.message.includes('does not exist')) {
+        } else {
           console.warn('Error syncing deleted customers:', error.message);
+          errors.push(`حذف الزبائن: ${error.message}`);
         }
       }
 
@@ -320,8 +381,9 @@ class SyncEngine {
         if (!error) {
           db.clearDeleteQueue('suppliers', deletedSuppliers);
           processed += deletedSuppliers.length;
-        } else if (!error.message.includes('does not exist')) {
+        } else {
           console.warn('Error syncing deleted suppliers:', error.message);
+          errors.push(`حذف الموردين: ${error.message}`);
         }
       }
 
@@ -357,9 +419,9 @@ class SyncEngine {
           updated_at: new Date().toISOString(),
         };
         const { error: bizErr } = await supabase.from('businesses').upsert(bizPayload);
-        if (bizErr && !bizErr.message.includes('does not exist')) {
+        if (bizErr) {
           errors.push(`المتجر (Business): ${bizErr.message}`);
-        } else if (!bizErr) {
+        } else {
           processed += 1;
         }
       } catch (e: any) {
@@ -381,7 +443,7 @@ class SyncEngine {
             created_at: b.created_at || new Date().toISOString(),
           }));
           const { error: brErr } = await supabase.from('branches').upsert(branchPayload);
-          if (brErr && !brErr.message.includes('does not exist')) {
+          if (brErr) {
             errors.push(`الفروع (Branches): ${brErr.message}`);
           }
         }
@@ -401,9 +463,9 @@ class SyncEngine {
           created_at: c.created_at || new Date().toISOString(),
         }));
         const { error: catErr } = await supabase.from('categories').upsert(catPayload);
-        if (catErr && !catErr.message.includes('does not exist')) {
+        if (catErr) {
           errors.push(`الفئات (Categories): ${catErr.message}`);
-        } else if (!catErr) {
+        } else {
           processed += localCategories.length;
           // Add successfully pushed IDs to synced_categories list
           const currentSynced = db.getSyncedIds('categories');
@@ -413,7 +475,7 @@ class SyncEngine {
       }
 
       // C4. Push Products
-      const localProducts = db.getProducts(bizId, branchId);
+      const localProducts = db.getProducts(bizId);
       if (localProducts.length > 0) {
         const prodPayload = localProducts.map(p => ({
           id: p.id,
@@ -439,9 +501,9 @@ class SyncEngine {
           updated_at: new Date().toISOString(),
         }));
         const { error: prodErr } = await supabase.from('products').upsert(prodPayload);
-        if (prodErr && !prodErr.message.includes('does not exist')) {
+        if (prodErr) {
           errors.push(`السلع (Products): ${prodErr.message}`);
-        } else if (!prodErr) {
+        } else {
           processed += localProducts.length;
           // Add successfully pushed IDs to synced_products list
           const currentSynced = db.getSyncedIds('products');
@@ -473,9 +535,9 @@ class SyncEngine {
           updated_at: new Date().toISOString(),
         }));
         const { error: custErr } = await supabase.from('customers').upsert(custPayload);
-        if (custErr && !custErr.message.includes('does not exist')) {
+        if (custErr) {
           errors.push(`الزبائن (Customers): ${custErr.message}`);
-        } else if (!custErr) {
+        } else {
           processed += localCustomers.length;
           // Add successfully pushed IDs to synced_customers list
           const currentSynced = db.getSyncedIds('customers');
@@ -506,9 +568,9 @@ class SyncEngine {
           updated_at: new Date().toISOString(),
         }));
         const { error: suppErr } = await supabase.from('suppliers').upsert(suppPayload);
-        if (suppErr && !suppErr.message.includes('does not exist')) {
+        if (suppErr) {
           errors.push(`الموردين (Suppliers): ${suppErr.message}`);
-        } else if (!suppErr) {
+        } else {
           processed += localSuppliers.length;
           // Add successfully pushed IDs to synced_suppliers list
           const currentSynced = db.getSyncedIds('suppliers');
@@ -518,7 +580,7 @@ class SyncEngine {
       }
 
       // C7. Push Sales & Invoices
-      const localSales = db.getSales(bizId, branchId);
+      const localSales = db.getSales(bizId);
       if (localSales.length > 0) {
         const salesPayload = localSales.map(s => ({
           id: s.id,
@@ -541,9 +603,9 @@ class SyncEngine {
           created_at: s.created_at || new Date().toISOString(),
         }));
         const { error: salesErr } = await supabase.from('sales').upsert(salesPayload);
-        if (salesErr && !salesErr.message.includes('does not exist')) {
+        if (salesErr) {
           errors.push(`المبيعات (Sales): ${salesErr.message}`);
-        } else if (!salesErr) {
+        } else {
           processed += localSales.length;
         }
       }
@@ -566,13 +628,13 @@ class SyncEngine {
           created_at: sr.created_at || new Date().toISOString(),
         }));
         const { error: srErr } = await supabase.from('sale_returns').upsert(saleReturnPayload);
-        if (srErr && !srErr.message.includes('does not exist')) {
+        if (srErr) {
           errors.push(`مرتجعات المبيعات (Sale Returns): ${srErr.message}`);
         }
       }
 
       // C9. Push Purchases
-      const localPurchases = db.getPurchases(bizId, branchId);
+      const localPurchases = db.getPurchases(bizId);
       if (localPurchases.length > 0) {
         const purchasesPayload = localPurchases.map(p => ({
           id: p.id,
@@ -594,9 +656,9 @@ class SyncEngine {
           created_at: p.created_at || new Date().toISOString(),
         }));
         const { error: purchErr } = await supabase.from('purchases').upsert(purchasesPayload);
-        if (purchErr && !purchErr.message.includes('does not exist')) {
+        if (purchErr) {
           errors.push(`المشتريات (Purchases): ${purchErr.message}`);
-        } else if (!purchErr) {
+        } else {
           processed += localPurchases.length;
         }
       }
@@ -618,13 +680,13 @@ class SyncEngine {
           created_at: pr.created_at || new Date().toISOString(),
         }));
         const { error: prErr } = await supabase.from('purchase_returns').upsert(purchReturnPayload);
-        if (prErr && !prErr.message.includes('does not exist')) {
+        if (prErr) {
           errors.push(`مرتجعات المشتريات (Purchase Returns): ${prErr.message}`);
         }
       }
 
       // C11. Push Expenses
-      const localExpenses = db.getExpenses(bizId, branchId);
+      const localExpenses = db.getExpenses(bizId);
       if (localExpenses.length > 0) {
         const expPayload = localExpenses.map(e => ({
           id: e.id,
@@ -639,15 +701,15 @@ class SyncEngine {
           created_at: e.created_at || new Date().toISOString(),
         }));
         const { error: expErr } = await supabase.from('expenses').upsert(expPayload);
-        if (expErr && !expErr.message.includes('does not exist')) {
+        if (expErr) {
           errors.push(`المصاريف (Expenses): ${expErr.message}`);
-        } else if (!expErr) {
+        } else {
           processed += localExpenses.length;
         }
       }
 
       // C12. Push Cash Transactions
-      const localCash = db.getCashTransactions(bizId, branchId);
+      const localCash = db.getCashTransactions(bizId);
       if (localCash.length > 0) {
         const cashPayload = localCash.map(c => ({
           id: c.id,
@@ -663,9 +725,9 @@ class SyncEngine {
           created_at: c.created_at || new Date().toISOString(),
         }));
         const { error: cashErr } = await supabase.from('cash_transactions').upsert(cashPayload);
-        if (cashErr && !cashErr.message.includes('does not exist')) {
+        if (cashErr) {
           errors.push(`الصندوق (Cash): ${cashErr.message}`);
-        } else if (!cashErr) {
+        } else {
           processed += localCash.length;
         }
       }
@@ -688,15 +750,15 @@ class SyncEngine {
           created_at: p.created_at || new Date().toISOString(),
         }));
         const { error: payErr } = await supabase.from('payment_transactions').upsert(payPayload);
-        if (payErr && !payErr.message.includes('does not exist')) {
+        if (payErr) {
           errors.push(`تسديدات الديون (Payments): ${payErr.message}`);
-        } else if (!payErr) {
+        } else {
           processed += localPayments.length;
         }
       }
 
       // C14. Push Stock Movements
-      const localStockMovements = db.getStockMovements(bizId, branchId);
+      const localStockMovements = db.getStockMovements(bizId);
       if (localStockMovements.length > 0) {
         const smPayload = localStockMovements.slice(0, 500).map(sm => ({
           id: sm.id,
@@ -714,7 +776,7 @@ class SyncEngine {
           created_at: sm.created_at || new Date().toISOString(),
         }));
         const { error: smErr } = await supabase.from('stock_movements').upsert(smPayload);
-        if (smErr && !smErr.message.includes('does not exist')) {
+        if (smErr) {
           errors.push(`حركات المخزون (Stock Movements): ${smErr.message}`);
         }
       }

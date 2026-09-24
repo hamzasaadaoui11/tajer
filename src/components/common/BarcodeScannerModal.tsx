@@ -125,7 +125,7 @@ export const BarcodeScannerModal: React.FC = () => {
         if (capabilities && 'torch' in capabilities) {
           const nextTorch = !isTorchOn;
           await track.applyConstraints({
-            advanced: [{ torch: nextTorch }]
+            advanced: [{ torch: nextTorch } as any]
           });
           setIsTorchOn(nextTorch);
         }

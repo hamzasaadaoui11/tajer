@@ -25,6 +25,7 @@ import { db } from '../../services/db';
 import { PaymentMethod, Customer, Sale } from '../../types';
 import { playBeep } from '../../services/barcode';
 import { formatMAD, formatUnit } from '../../i18n/locales';
+import { syncEngine } from '../../services/sync';
 
 export const POSView: React.FC = () => {
   const {
@@ -179,6 +180,7 @@ export const POSView: React.FC = () => {
 
     // Save transaction in database
     db.createSale(newSale);
+    syncEngine.syncAll().then(refreshData).catch(() => {});
 
     // Supermarket feedback
     playBeep();

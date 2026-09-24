@@ -200,7 +200,7 @@ class LocalDatabase {
       };
 
       const initialBranch: Branch = {
-        id: 'br-' + Math.random().toString(36).substring(2, 9),
+        id: 'br-' + initialBusiness.id + '-main',
         business_id: initialBusiness.id,
         name: 'الفرع الرئيسي',
         city: 'الدار البيضاء',
@@ -393,12 +393,17 @@ class LocalDatabase {
   public getProducts(businessId?: string, branchId?: string): Product[] {
     let all = this.get<Product>('products');
     if (businessId) {
-      all = all.filter(p => p.business_id === businessId);
-    }
-    if (branchId) {
-      const branchFiltered = all.filter(p => p.branch_id === branchId || !p.branch_id);
-      if (branchFiltered.length > 0) {
-        return branchFiltered;
+      all = all.filter(p => !p.business_id || p.business_id === businessId);
+      // Auto-heal any products missing business_id so they sync cleanly
+      let healed = false;
+      for (const p of all) {
+        if (!p.business_id) {
+          p.business_id = businessId;
+          healed = true;
+        }
+      }
+      if (healed) {
+        this.set('products', all);
       }
     }
     return all;
@@ -556,8 +561,7 @@ class LocalDatabase {
 
   // --- Stock Movements & Inventory Count ---
   public getStockMovements(businessId: string, branchId?: string): StockMovement[] {
-    const all = this.get<StockMovement>('stock_movements').filter(m => m.business_id === businessId);
-    if (branchId) return all.filter(m => m.branch_id === branchId);
+    const all = this.get<StockMovement>('stock_movements').filter(m => !m.business_id || m.business_id === businessId);
     return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
@@ -601,8 +605,17 @@ class LocalDatabase {
 
   // --- Sales Execution (Transactions) ---
   public getSales(businessId: string, branchId?: string): Sale[] {
-    const all = this.get<Sale>('sales').filter(s => s.business_id === businessId);
-    if (branchId) return all.filter(s => s.branch_id === branchId);
+    const all = this.get<Sale>('sales').filter(s => !s.business_id || s.business_id === businessId);
+    let healed = false;
+    for (const s of all) {
+      if (!s.business_id) {
+        s.business_id = businessId;
+        healed = true;
+      }
+    }
+    if (healed) {
+      this.set('sales', all);
+    }
     return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
@@ -798,8 +811,7 @@ class LocalDatabase {
 
   // --- Purchases Execution ---
   public getPurchases(businessId: string, branchId?: string): Purchase[] {
-    const all = this.get<Purchase>('purchases').filter(p => p.business_id === businessId);
-    if (branchId) return all.filter(p => p.branch_id === branchId);
+    const all = this.get<Purchase>('purchases').filter(p => !p.business_id || p.business_id === businessId);
     return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
@@ -1031,8 +1043,7 @@ class LocalDatabase {
 
   // --- Expenses ---
   public getExpenses(businessId: string, branchId?: string): Expense[] {
-    const all = this.get<Expense>('expenses').filter(e => e.business_id === businessId);
-    if (branchId) return all.filter(e => e.branch_id === branchId);
+    const all = this.get<Expense>('expenses').filter(e => !e.business_id || e.business_id === businessId);
     return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
@@ -1102,8 +1113,7 @@ class LocalDatabase {
 
   // --- Cash Treasury / Caisse ---
   public getCashTransactions(businessId: string, branchId?: string): CashTransaction[] {
-    const all = this.get<CashTransaction>('cash_transactions').filter(c => c.business_id === businessId);
-    if (branchId) return all.filter(c => c.branch_id === branchId);
+    const all = this.get<CashTransaction>('cash_transactions').filter(c => !c.business_id || c.business_id === businessId);
     return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 

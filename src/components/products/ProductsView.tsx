@@ -24,6 +24,7 @@ import { Product, StockAdjustment } from '../../types';
 import { generateRandomBarcode } from '../../services/barcode';
 import { formatMAD, formatUnit } from '../../i18n/locales';
 import { generateSeedData } from '../../services/seed';
+import { syncEngine } from '../../services/sync';
 
 const formatCategoryName = (catName: string, lang: string) => {
   if (lang === 'ar' || !catName) return catName;
@@ -199,6 +200,7 @@ export const ProductsView: React.FC = () => {
     db.saveProduct(prodData, user.name);
     setIsModalOpen(false);
     refreshData();
+    syncEngine.syncAll().then(refreshData).catch(() => {});
   };
 
   // Delete product
@@ -230,6 +232,7 @@ export const ProductsView: React.FC = () => {
     setAdjustModalProduct(null);
     setCountedQty('');
     refreshData();
+    syncEngine.syncAll().then(refreshData).catch(() => {});
   };
 
   const handleSeedDemoData = () => {
@@ -947,6 +950,7 @@ export const ProductsView: React.FC = () => {
                   db.deleteProduct(deleteConfirmProduct.id, business.id, user.name);
                   setDeleteConfirmProduct(null);
                   refreshData();
+                  syncEngine.syncAll().then(refreshData).catch(() => {});
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition cursor-pointer select-none"
               >

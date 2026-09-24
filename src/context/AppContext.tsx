@@ -516,13 +516,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.success) {
         setSyncStatus('synced');
         setDataVersion(v => v + 1);
+        if (res.processed > 0) {
+          alert(lang === 'ar' ? `تمت المزامنة بنجاح! تم تحديث ${res.processed} من العمليات والسلع.` : `Mise à jour réussie ! ${res.processed} éléments synchronisés.`);
+        }
       } else {
         setSyncStatus(navigator.onLine ? 'synced' : 'offline');
+        if (res.errors && res.errors.length > 0) {
+          console.error('Sync errors:', res.errors);
+          alert(
+            (lang === 'ar' ? 'فشلت المزامنة بسبب الأخطاء التالية من Supabase (غالباً RLS أو جداول ناقصة):\n\n' : 'Échec de synchronisation (Erreurs Supabase/RLS) :\n\n') + 
+            res.errors.join('\n')
+          );
+        }
       }
-    } catch {
+    } catch (e: any) {
       setSyncStatus(navigator.onLine ? 'synced' : 'offline');
+      alert('Error: ' + (e?.message || e));
     }
-  }, []);
+  }, [lang]);
 
   // Continuous Auto-Sync: Runs periodically and on app resume/focus
   useEffect(() => {
@@ -535,14 +546,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.success) setDataVersion(v => v + 1);
     }).catch(() => {});
 
-    // 2. Periodic sync every 20 seconds
+    // 2. Periodic sync every 5 seconds for fast multi-PC synchronization
     const interval = setInterval(() => {
       if (navigator.onLine) {
         syncEngine.syncAll().then(res => {
           if (res.success && res.processed > 0) setDataVersion(v => v + 1);
         }).catch(() => {});
       }
-    }, 20000);
+    }, 5000);
 
     // 3. Sync on app focus / tab switch / resume
     const handleResumeOrFocus = () => {
