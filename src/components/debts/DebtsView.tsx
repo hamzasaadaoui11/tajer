@@ -20,6 +20,7 @@ import { db } from '../../services/db';
 import { Customer, Supplier, PaymentTransaction, PaymentMethod } from '../../types';
 import { formatMAD } from '../../i18n/locales';
 import { generateCustomerStatementWhatsAppText, openWhatsApp } from '../../services/whatsapp';
+import { syncEngine } from '../../services/sync';
 
 export const DebtsView: React.FC = () => {
   const { business, branch, user, formatCurrency, refreshData, dataVersion, lang } = useApp();
@@ -110,6 +111,7 @@ export const DebtsView: React.FC = () => {
     setPayingEntity(null);
     setPaymentAmount('');
     refreshData();
+    syncEngine.syncAll().then(refreshData).catch(() => {});
   };
 
   // Send WhatsApp Statement to Customer

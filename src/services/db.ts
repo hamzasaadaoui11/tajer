@@ -123,6 +123,17 @@ class LocalDatabase {
     return this.getTombstones(collection).includes(id);
   }
 
+  public removeFromTombstones(collection: string, id: string): void {
+    try {
+      const key = `${this.getPrefix()}tombstones_${collection}`;
+      const list: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      const filtered = list.filter((i: string) => i !== id);
+      localStorage.setItem(key, JSON.stringify(filtered));
+    } catch (e) {
+      console.error(`Failed to remove from tombstones for ${collection}`, e);
+    }
+  }
+
   // --- Synced IDs for delta syncing ---
   public getSyncedIds(collection: string): string[] {
     try {
@@ -574,6 +585,8 @@ class LocalDatabase {
       list.push(customer);
     }
     this.set('customers', list);
+    this.addPendingCreate('customers', customer.id);
+    this.removeFromTombstones('customers', customer.id);
   }
 
   public deleteCustomer(id: string): void {
@@ -598,6 +611,8 @@ class LocalDatabase {
       list.push(supplier);
     }
     this.set('suppliers', list);
+    this.addPendingCreate('suppliers', supplier.id);
+    this.removeFromTombstones('suppliers', supplier.id);
   }
 
   public deleteSupplier(id: string): void {

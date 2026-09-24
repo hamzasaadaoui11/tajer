@@ -12,6 +12,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
 import { CashTransaction } from '../../types';
+import { syncEngine } from '../../services/sync';
 
 export const CashView: React.FC = () => {
   const { business, branch, user, formatCurrency, refreshData, dataVersion, lang } = useApp();
@@ -100,6 +101,7 @@ export const CashView: React.FC = () => {
     setCashDesc('');
     setCurrentPageTx(1);
     refreshData();
+    syncEngine.syncAll().then(refreshData).catch(() => {});
   };
 
   return (

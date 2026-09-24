@@ -23,6 +23,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
 import { Expense } from '../../types';
+import { syncEngine } from '../../services/sync';
 
 export const ExpensesView: React.FC = () => {
   const { business, branch, user, formatCurrency, refreshData, dataVersion, lang } = useApp();
@@ -168,6 +169,7 @@ export const ExpensesView: React.FC = () => {
     setIsModalOpen(false);
     setCurrentPage(1);
     refreshData();
+    syncEngine.syncAll().then(refreshData).catch(() => {});
   };
 
   // Delete Expense
@@ -178,6 +180,7 @@ export const ExpensesView: React.FC = () => {
     if (window.confirm(confirmMsg)) {
       db.deleteExpense(id, business.id, user?.name || 'Admin');
       refreshData();
+      syncEngine.syncAll().then(refreshData).catch(() => {});
     }
   };
 

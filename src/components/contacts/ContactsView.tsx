@@ -73,7 +73,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
   }, [suppliers, search]);
 
   // Save Customer
-  const handleSaveCustomer = (e: React.FormEvent) => {
+  const handleSaveCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cName.trim()) return;
 
@@ -92,13 +92,13 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
       updated_at: new Date().toISOString(),
     };
 
-    db.saveCustomer(cust);
     setIsCustomerModalOpen(false);
+    await syncEngine.saveCustomerEverywhere(cust);
     refreshData();
   };
 
   // Save Supplier
-  const handleSaveSupplier = (e: React.FormEvent) => {
+  const handleSaveSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sName.trim()) return;
 
@@ -116,8 +116,8 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
       updated_at: new Date().toISOString(),
     };
 
-    db.saveSupplier(supp);
     setIsSupplierModalOpen(false);
+    await syncEngine.saveSupplierEverywhere(supp);
     refreshData();
   };
 

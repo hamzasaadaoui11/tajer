@@ -18,6 +18,7 @@ import { db } from '../../services/db';
 import { Purchase, PurchaseItem, PaymentMethod } from '../../types';
 import { formatMAD } from '../../i18n/locales';
 import { PurchaseReceiptModal } from './PurchaseReceiptModal';
+import { syncEngine } from '../../services/sync';
 
 export const PurchasesView: React.FC = () => {
   const { business, branch, user, formatCurrency, refreshData, dataVersion, lang } = useApp();
@@ -163,6 +164,7 @@ export const PurchasesView: React.FC = () => {
     const newPurchase = db.createPurchase(purchaseData);
     setIsModalOpen(false);
     refreshData();
+    syncEngine.syncAll().then(refreshData).catch(() => {});
     // Open A4 invoice modal directly so user can print/view right away
     setSelectedPurchaseForReceipt(newPurchase || (purchaseData as Purchase));
   };

@@ -1,6 +1,6 @@
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { db } from './db';
-import { Product } from '../types';
+import { Product, Customer, Supplier } from '../types';
 
 export interface SyncResult {
   success: boolean;
@@ -165,11 +165,11 @@ class SyncEngine {
             if (pendingDeletes.has(c.id) || tombstones.has(c.id)) return false;
             if (remoteIds.has(c.id)) return true;
             
-            // Only keep if genuinely an unsynced offline draft
+            // If never synced to cloud, it is a new local item created on this device! Always keep it!
             const wasSynced = syncedCatIds.has(c.id);
-            if (pendingCatCreates.has(c.id) && !wasSynced) return true;
+            if (!wasSynced) return true;
 
-            // If previously synced and now absent from remote, it was deleted on another device!
+            // Only if previously synced and now absent from remote, it was deleted on another device!
             db.addToTombstones('categories', c.id);
             db.removePendingCreate('categories', c.id);
             db.removeSyncedId('categories', c.id);
@@ -227,9 +227,9 @@ class SyncEngine {
             if (pendingDeletes.has(p.id) || tombstones.has(p.id) || p.is_active === false) return false;
             if (remoteIds.has(p.id)) return true;
             
-            // Critical: If it was already synced to the cloud, it cannot be an un-synced offline draft!
+            // If never synced to cloud, it is a new local product created on this device! Always keep it!
             const wasSynced = syncedProdIds.has(p.id);
-            if (pendingProdCreates.has(p.id) && !wasSynced) return true; // offline draft
+            if (!wasSynced) return true;
 
             // If it was in the cloud before and now absent, it was deleted on another device!
             db.addToTombstones('products', p.id);
@@ -325,8 +325,9 @@ class SyncEngine {
             if (pendingDeletes.has(c.id) || tombstones.has(c.id)) return false;
             if (remoteIds.has(c.id)) return true;
 
+            // If never synced to cloud, it is a new local customer created on this device! Always keep it!
             const wasSynced = syncedCustIds.has(c.id);
-            if (pendingCustCreates.has(c.id) && !wasSynced) return true;
+            if (!wasSynced) return true;
 
             db.addToTombstones('customers', c.id);
             db.removePendingCreate('customers', c.id);
@@ -410,8 +411,9 @@ class SyncEngine {
             if (pendingDeletes.has(s.id) || tombstones.has(s.id)) return false;
             if (remoteIds.has(s.id)) return true;
 
+            // If never synced to cloud, it is a new local supplier created on this device! Always keep it!
             const wasSynced = syncedSuppIds.has(s.id);
-            if (pendingSuppCreates.has(s.id) && !wasSynced) return true;
+            if (!wasSynced) return true;
 
             db.addToTombstones('suppliers', s.id);
             db.removePendingCreate('suppliers', s.id);
@@ -1107,6 +1109,85 @@ class SyncEngine {
       }
     } else {
       db.addPendingCreate('products', product.id);
+    }
+    return { success: true };
+  }
+
+  // Instant multi-device customer save/update
+  public async saveCustomerEverywhere(customer: Customer): Promise<{ success: boolean }> {
+    db.saveCustomer(customer);
+    const supabase = getSupabase();
+    if (supabase && isSupabaseConfigured() && navigator.onLine) {
+      try {
+        const payload = {
+          id: customer.id,
+          business_id: customer.business_id,
+          name: customer.name,
+          phone: customer.phone || '',
+          address: customer.address || null,
+          city: customer.city || null,
+          ice: customer.ice || null,
+          if_number: customer.ifNumber || null,
+          notes: customer.notes || null,
+          credit_limit: customer.credit_limit || 0,
+          total_spent: customer.total_spent || 0,
+          total_debt: customer.total_debt || 0,
+          created_at: customer.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        const { error } = await supabase.from('customers').upsert(payload);
+        if (!error) {
+          db.addSyncedId('customers', customer.id);
+          db.clearPendingCreates('customers', [customer.id]);
+        } else {
+          console.warn('Direct save customer error:', error.message);
+          db.addPendingCreate('customers', customer.id);
+        }
+      } catch (err) {
+        console.warn('Direct save customer failed:', err);
+        db.addPendingCreate('customers', customer.id);
+      }
+    } else {
+      db.addPendingCreate('customers', customer.id);
+    }
+    return { success: true };
+  }
+
+  // Instant multi-device supplier save/update
+  public async saveSupplierEverywhere(supplier: Supplier): Promise<{ success: boolean }> {
+    db.saveSupplier(supplier);
+    const supabase = getSupabase();
+    if (supabase && isSupabaseConfigured() && navigator.onLine) {
+      try {
+        const payload = {
+          id: supplier.id,
+          business_id: supplier.business_id,
+          name: supplier.name,
+          phone: supplier.phone || '',
+          address: supplier.address || null,
+          city: supplier.city || null,
+          ice: supplier.ice || null,
+          if_number: supplier.ifNumber || null,
+          notes: supplier.notes || null,
+          total_purchased: supplier.total_purchased || 0,
+          total_debt: supplier.total_debt || 0,
+          created_at: supplier.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        const { error } = await supabase.from('suppliers').upsert(payload);
+        if (!error) {
+          db.addSyncedId('suppliers', supplier.id);
+          db.clearPendingCreates('suppliers', [supplier.id]);
+        } else {
+          console.warn('Direct save supplier error:', error.message);
+          db.addPendingCreate('suppliers', supplier.id);
+        }
+      } catch (err) {
+        console.warn('Direct save supplier failed:', err);
+        db.addPendingCreate('suppliers', supplier.id);
+      }
+    } else {
+      db.addPendingCreate('suppliers', supplier.id);
     }
     return { success: true };
   }
