@@ -11,13 +11,16 @@ import {
   CheckCircle2,
   Clock,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  CreditCard,
+  DollarSign
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
-import { Sale, SaleReturn } from '../../types';
+import { Sale, SaleReturn, PaymentMethod } from '../../types';
 import { generateSaleWhatsAppText, openWhatsApp } from '../../services/whatsapp';
 import { formatMAD } from '../../i18n/locales';
+import { syncEngine } from '../../services/sync';
 
 export const SalesView: React.FC = () => {
   const { business, branch, user, formatCurrency, setActiveSaleReceipt, refreshData, dataVersion, lang } = useApp();
@@ -27,10 +30,17 @@ export const SalesView: React.FC = () => {
   const [returnQtys, setReturnQtys] = useState<Record<string, number>>({});
   const [returnReason, setReturnReason] = useState(lang === 'ar' ? 'سلعة معيبة أو رغبة الزبون' : 'Article défectueux ou souhait client');
   
+  // Convert/Adjust Payment Modal
+  const [editPaymentSale, setEditPaymentSale] = useState<Sale | null>(null);
+  const [editPaymentMethod, setEditPaymentMethod] = useState<PaymentMethod>('CREDIT');
+  const [editCustomerId, setEditCustomerId] = useState('');
+  const [editAmountPaid, setEditAmountPaid] = useState('0');
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 7;
 
   const sales = useMemo(() => db.getSales(business.id, branch.id), [business.id, branch.id, dataVersion]);
+  const customers = useMemo(() => db.getCustomers(business.id), [business.id, dataVersion]);
 
   const filteredSales = useMemo(() => {
     return sales.filter(s => 
@@ -46,6 +56,48 @@ export const SalesView: React.FC = () => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     return filteredSales.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredSales, currentPage]);
+
+  const handleOpenEditPayment = (sale: Sale) => {
+    setEditPaymentSale(sale);
+    setEditPaymentMethod(sale.payment_method === 'CREDIT' ? 'CREDIT' : 'CREDIT');
+    setEditCustomerId(sale.customer_id || '');
+    setEditAmountPaid(sale.payment_method === 'CREDIT' ? '0' : (sale.amount_paid || 0).toString());
+  };
+
+  const handleSaveEditPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editPaymentSale) return;
+
+    const paidNum = parseFloat(editAmountPaid) || 0;
+    const dueNum = Math.max(0, editPaymentSale.total - paidNum);
+
+    if (dueNum > 0 && !editCustomerId) {
+      alert(lang === 'ar' ? '⚠️ يرجى تحديد العميل لتسجيل المبلغ المتبقي كدين في ذمته!' : '⚠️ Veuillez sélectionner un client pour enregistrer la créance !');
+      return;
+    }
+
+    const selectedCust = customers.find(c => c.id === editCustomerId);
+    const customerName = selectedCust ? selectedCust.name : editPaymentSale.customer_name;
+
+    db.updateSalePaymentStatus(
+      business.id,
+      editPaymentSale.id,
+      editPaymentMethod,
+      paidNum,
+      editCustomerId || undefined,
+      customerName,
+      user.name
+    );
+
+    if (editCustomerId && selectedCust) {
+      const updatedCust = db.getCustomerById(editCustomerId);
+      if (updatedCust) syncEngine.saveCustomerEverywhere(updatedCust).catch(() => {});
+    }
+
+    setEditPaymentSale(null);
+    refreshData();
+    syncEngine.syncAll().then(refreshData).catch(() => {});
+  };
 
   const handleOpenReturn = (sale: Sale) => {
     setReturnModalSale(sale);
@@ -214,6 +266,15 @@ export const SalesView: React.FC = () => {
                   >
                     <Receipt className="w-3.5 h-3.5" />
                     <span>{lang === 'ar' ? 'عرض' : 'Voir'}</span>
+                  </button>
+
+                  {/* Convert / Adjust Payment to Credit */}
+                  <button
+                    onClick={() => handleOpenEditPayment(sale)}
+                    className="p-1.5 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-600 border border-amber-200 dark:border-amber-800 cursor-pointer transition"
+                    title={lang === 'ar' ? 'تعديل طريقة الأداء / تسجيل كدين كريدي' : 'Modifier le mode de paiement'}
+                  >
+                    <CreditCard className="w-4 h-4" />
                   </button>
 
                   {/* Return Item */}
@@ -393,6 +454,132 @@ export const SalesView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setReturnModalSale(null)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
+                >
+                  {lang === 'ar' ? 'إلغاء' : 'Annuler'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payment / Convert to Credit Modal */}
+      {editPaymentSale && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className={`w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                  {lang === 'ar' ? 'تعديل السداد / تحويل لكريدي' : 'Modifier le paiement'}
+                </h3>
+                <span className="text-xs text-slate-400 font-mono">
+                  {editPaymentSale.invoice_number} ({formatCurrency(editPaymentSale.total)})
+                </span>
+              </div>
+              <button onClick={() => setEditPaymentSale(null)} className="text-slate-400 p-1 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPayment} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {lang === 'ar' ? 'العميل *' : 'Client *'}
+                </label>
+                <select
+                  required
+                  value={editCustomerId}
+                  onChange={e => setEditCustomerId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-bold"
+                >
+                  <option value="">{lang === 'ar' ? '-- اختر العميل لتسجيل الدين --' : '-- Choisir client --'}</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.phone ? `(${c.phone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {lang === 'ar' ? 'طريقة الأداء' : 'Mode de règlement'}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditPaymentMethod('CREDIT');
+                      setEditAmountPaid('0');
+                    }}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                      editPaymentMethod === 'CREDIT'
+                        ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600'
+                    }`}
+                  >
+                    {lang === 'ar' ? 'كريدي (غير مؤدى)' : 'Crédit impayé'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditPaymentMethod('CASH');
+                      setEditAmountPaid(editPaymentSale.total.toString());
+                    }}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                      editPaymentMethod === 'CASH'
+                        ? 'bg-teal-50 dark:bg-teal-950/60 border-teal-500 text-teal-900 dark:text-teal-200 ring-2 ring-teal-500'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600'
+                    }`}
+                  >
+                    {lang === 'ar' ? 'نقداً (مدفوع)' : 'Payé en espèces'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {lang === 'ar' ? 'المبلغ المدفوع (DH)' : 'Montant payé (DH)'}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max={editPaymentSale.total}
+                  value={editAmountPaid}
+                  onChange={e => setEditAmountPaid(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-center"
+                />
+              </div>
+
+              {/* Remaining calculation banner */}
+              {(() => {
+                const p = parseFloat(editAmountPaid) || 0;
+                const rem = Math.max(0, editPaymentSale.total - p);
+                return (
+                  <div className={`p-2.5 rounded-xl text-xs font-bold flex justify-between items-center ${
+                    rem > 0 
+                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900' 
+                      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900'
+                  }`}>
+                    <span>{rem > 0 ? (lang === 'ar' ? 'المبلغ المتبقي كدين:' : 'Reste dû :') : (lang === 'ar' ? 'الفاتورة مسددة بالكامل' : 'Facture soldée')}</span>
+                    <span className="text-sm font-extrabold">{formatCurrency(rem)}</span>
+                  </div>
+                );
+              })()}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                >
+                  {lang === 'ar' ? 'حفظ وتحديث رصيد العميل' : 'Enregistrer'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditPaymentSale(null)}
                   className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
                 >
                   {lang === 'ar' ? 'إلغاء' : 'Annuler'}

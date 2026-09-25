@@ -573,7 +573,12 @@ class LocalDatabase {
 
   // --- Customers ---
   public getCustomers(businessId: string): Customer[] {
+    this.reconcileCustomerDebts(businessId);
     return this.get<Customer>('customers').filter(c => c.business_id === businessId);
+  }
+
+  public getCustomerById(id: string): Customer | undefined {
+    return this.get<Customer>('customers').find(c => c.id === id);
   }
 
   public saveCustomer(customer: Customer): void {
@@ -597,9 +602,89 @@ class LocalDatabase {
     this.removePendingCreate('customers', id);
   }
 
+  // Auto-reconcile customer debts based on actual sales, returns, and payments
+  public reconcileCustomerDebts(businessId: string): void {
+    try {
+      const customers = this.get<Customer>('customers');
+      const sales = this.get<Sale>('sales').filter(s => !s.business_id || s.business_id === businessId);
+      const payments = this.get<PaymentTransaction>('payments').filter(p => !p.business_id || p.business_id === businessId);
+      const returns = this.get<SaleReturn>('sale_returns').filter(r => !r.business_id || r.business_id === businessId);
+
+      let changed = false;
+
+      for (const cust of customers) {
+        if (cust.business_id && cust.business_id !== businessId) continue;
+
+        // Match sales by customer_id or matching non-generic name
+        const custSales = sales.filter(s => 
+          s.customer_id === cust.id || 
+          (!s.customer_id && s.customer_name && s.customer_name.trim().toLowerCase() === cust.name.trim().toLowerCase() && cust.name !== 'زبون عام (Comptoir)' && cust.name !== 'Client Comptoir')
+        );
+
+        // Fix sales missing customer_id
+        for (const s of custSales) {
+          if (!s.customer_id) {
+            s.customer_id = cust.id;
+            changed = true;
+          }
+        }
+
+        const totalCreditSales = custSales.reduce((sum, s) => {
+          let due = s.amount_due;
+          if (due === undefined || due === null) {
+            due = s.payment_method === 'CREDIT' ? s.total : Math.max(0, s.total - (s.amount_paid || 0));
+          } else if (s.payment_method === 'CREDIT' && due <= 0 && s.total > 0 && (!s.amount_paid || s.amount_paid === 0)) {
+            due = s.total;
+          }
+          return sum + Math.max(0, due);
+        }, 0);
+
+        const custPayments = payments.filter(p => 
+          p.type === 'CUSTOMER_PAYMENT' && 
+          (p.entity_id === cust.id || (p.entity_name && p.entity_name.trim().toLowerCase() === cust.name.trim().toLowerCase()))
+        );
+        const totalPayments = custPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+        const custReturns = returns.filter(r => 
+          r.customer_id === cust.id || 
+          (!r.customer_id && r.customer_name && r.customer_name.trim().toLowerCase() === cust.name.trim().toLowerCase())
+        );
+        const totalReturns = custReturns.reduce((sum, r) => sum + (r.total_refund || 0), 0);
+
+        const calculatedDebt = Math.max(0, totalCreditSales - totalPayments - totalReturns);
+        const calculatedTotalSpent = custSales.reduce((sum, s) => sum + (s.total || 0), 0);
+
+        // Self-heal if debt was wiped out or out of sync with actual invoices
+        if (calculatedDebt > (cust.total_debt || 0) || (cust.total_debt === 0 && calculatedDebt > 0)) {
+          cust.total_debt = calculatedDebt;
+          cust.total_spent = Math.max(cust.total_spent || 0, calculatedTotalSpent);
+          cust.updated_at = new Date().toISOString();
+          changed = true;
+          this.addPendingCreate('customers', cust.id);
+        } else if (calculatedTotalSpent > (cust.total_spent || 0)) {
+          cust.total_spent = calculatedTotalSpent;
+          cust.updated_at = new Date().toISOString();
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        this.set('customers', customers);
+        this.set('sales', sales);
+      }
+    } catch (e) {
+      console.warn('reconcileCustomerDebts notice:', e);
+    }
+  }
+
   // --- Suppliers ---
   public getSuppliers(businessId: string): Supplier[] {
+    this.reconcileSupplierDebts(businessId);
     return this.get<Supplier>('suppliers').filter(s => s.business_id === businessId);
+  }
+
+  public getSupplierById(id: string): Supplier | undefined {
+    return this.get<Supplier>('suppliers').find(s => s.id === id);
   }
 
   public saveSupplier(supplier: Supplier): void {
@@ -621,6 +706,116 @@ class LocalDatabase {
     this.addToTombstones('suppliers', id);
     this.removeSyncedId('suppliers', id);
     this.removePendingCreate('suppliers', id);
+  }
+
+  // Auto-reconcile supplier debts based on actual purchases, returns, and payments
+  public reconcileSupplierDebts(businessId: string): void {
+    try {
+      const suppliers = this.get<Supplier>('suppliers');
+      const purchases = this.getPurchases(businessId);
+      const payments = this.get<PaymentTransaction>('payments').filter(p => !p.business_id || p.business_id === businessId);
+      const returns = this.getPurchaseReturns(businessId);
+
+      let changed = false;
+
+      for (const supp of suppliers) {
+        if (supp.business_id && supp.business_id !== businessId) continue;
+
+        const suppPurchases = purchases.filter(p => 
+          p.supplier_id === supp.id || 
+          (!p.supplier_id && p.supplier_name && p.supplier_name.trim().toLowerCase() === supp.name.trim().toLowerCase() && supp.name !== 'مورد عام' && supp.name !== 'Fournisseur')
+        );
+
+        for (const p of suppPurchases) {
+          if (!p.supplier_id) {
+            p.supplier_id = supp.id;
+            changed = true;
+          }
+        }
+
+        const totalCreditPurchases = suppPurchases.reduce((sum, p) => {
+          let due = p.amount_due;
+          if (due === undefined || due === null) {
+            due = p.payment_method === 'CREDIT' ? p.total : Math.max(0, p.total - (p.amount_paid || 0));
+          } else if (p.payment_method === 'CREDIT' && due <= 0 && p.total > 0 && (!p.amount_paid || p.amount_paid === 0)) {
+            due = p.total;
+          }
+          return sum + Math.max(0, due);
+        }, 0);
+
+        const suppPayments = payments.filter(p => 
+          p.type === 'SUPPLIER_PAYMENT' && 
+          (p.entity_id === supp.id || (p.entity_name && p.entity_name.trim().toLowerCase() === supp.name.trim().toLowerCase()))
+        );
+        const totalPayments = suppPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+        const suppReturns = returns.filter(r => 
+          r.supplier_id === supp.id || 
+          (!r.supplier_id && r.supplier_name && r.supplier_name.trim().toLowerCase() === supp.name.trim().toLowerCase())
+        );
+        const totalReturns = suppReturns.reduce((sum, r) => sum + (r.total_refund || 0), 0);
+
+        const calculatedDebt = Math.max(0, totalCreditPurchases - totalPayments - totalReturns);
+        const calculatedTotalPurchased = suppPurchases.reduce((sum, p) => sum + (p.total || 0), 0);
+
+        if (calculatedDebt > (supp.total_debt || 0) || (supp.total_debt === 0 && calculatedDebt > 0)) {
+          supp.total_debt = calculatedDebt;
+          supp.total_purchased = Math.max(supp.total_purchased || 0, calculatedTotalPurchased);
+          supp.updated_at = new Date().toISOString();
+          changed = true;
+          this.addPendingCreate('suppliers', supp.id);
+        } else if (calculatedTotalPurchased > (supp.total_purchased || 0)) {
+          supp.total_purchased = calculatedTotalPurchased;
+          supp.updated_at = new Date().toISOString();
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        this.set('suppliers', suppliers);
+        this.set('purchases', purchases);
+      }
+    } catch (e) {
+      console.warn('reconcileSupplierDebts notice:', e);
+    }
+  }
+
+  // Direct manual debt adjustment for customers
+  public addManualCustomerDebt(businessId: string, customerId: string, amount: number, notes: string = 'تسجيل دين يدوي', userName: string = 'النظام'): void {
+    const customers = this.get<Customer>('customers');
+    const cIdx = customers.findIndex(c => c.id === customerId);
+    if (cIdx !== -1) {
+      customers[cIdx].total_debt = Math.max(0, (customers[cIdx].total_debt || 0) + amount);
+      customers[cIdx].updated_at = new Date().toISOString();
+      this.set('customers', customers);
+      this.addPendingCreate('customers', customerId);
+
+      this.addAuditLog(
+        businessId,
+        userName,
+        'إضافة دين عميل',
+        `تسجيل دين بمبلغ ${amount} DH على العميل ${customers[cIdx].name} (${notes})`
+      );
+    }
+  }
+
+  // Direct manual debt adjustment for suppliers
+  public addManualSupplierDebt(businessId: string, supplierId: string, amount: number, notes: string = 'تسجيل مستحق يدوي', userName: string = 'النظام'): void {
+    const suppliers = this.get<Supplier>('suppliers');
+    const sIdx = suppliers.findIndex(s => s.id === supplierId);
+    if (sIdx !== -1) {
+      suppliers[sIdx].total_debt = Math.max(0, (suppliers[sIdx].total_debt || 0) + amount);
+      suppliers[sIdx].updated_at = new Date().toISOString();
+      this.set('suppliers', suppliers);
+      this.addPendingCreate('suppliers', supplierId);
+
+      this.addAuditLog(
+        businessId,
+        userName,
+        'إضافة مستحق مورد',
+        `تسجيل مستحق بمبلغ ${amount} DH للمورد ${suppliers[sIdx].name} (${notes})`
+      );
+    }
   }
 
   // --- Purge any default mock customers/suppliers ---
@@ -789,20 +984,24 @@ class LocalDatabase {
     }
 
     // 3. Process Customer Debt if Credit / On Account
-    if (sale.customer_id && sale.amount_due > 0) {
+    if (sale.payment_method === 'CREDIT' && (sale.amount_due === undefined || sale.amount_due <= 0)) {
+      sale.amount_due = Math.max(0, sale.total - (sale.amount_paid || 0));
+    }
+
+    const debtToAdd = (sale.amount_due && sale.amount_due > 0)
+      ? sale.amount_due
+      : (sale.payment_method === 'CREDIT' ? Math.max(0, sale.total - (sale.amount_paid || 0)) : 0);
+
+    if (sale.customer_id) {
       const cIdx = customers.findIndex(c => c.id === sale.customer_id);
       if (cIdx !== -1) {
-        customers[cIdx].total_debt += sale.amount_due;
-        customers[cIdx].total_spent += sale.total;
+        if (debtToAdd > 0) {
+          customers[cIdx].total_debt = Math.max(0, (customers[cIdx].total_debt || 0) + debtToAdd);
+        }
+        customers[cIdx].total_spent = (customers[cIdx].total_spent || 0) + sale.total;
         customers[cIdx].updated_at = new Date().toISOString();
         this.set('customers', customers);
-      }
-    } else if (sale.customer_id) {
-      const cIdx = customers.findIndex(c => c.id === sale.customer_id);
-      if (cIdx !== -1) {
-        customers[cIdx].total_spent += sale.total;
-        customers[cIdx].updated_at = new Date().toISOString();
-        this.set('customers', customers);
+        this.addPendingCreate('customers', sale.customer_id);
       }
     }
 
@@ -815,7 +1014,46 @@ class LocalDatabase {
       sale.business_id,
       sale.user_name,
       'عملية بيع',
-      `فاتورة ${sale.invoice_number} بمبلغ إجمالي ${sale.total} DH (${sale.payment_method})`
+      `فاتورة ${sale.invoice_number} بمبلغ إجمالي ${sale.total} DH (${sale.payment_method}${debtToAdd > 0 ? ' - باقي دين: ' + debtToAdd + ' DH' : ''})`
+    );
+
+    return sale;
+  }
+
+  // Update sale payment status & recalculate debts
+  public updateSalePaymentStatus(
+    businessId: string,
+    saleId: string, 
+    newPaymentMethod: PaymentMethod, 
+    newAmountPaid: number, 
+    customerId?: string, 
+    customerName?: string,
+    userName: string = 'النظام'
+  ): Sale | null {
+    const sales = this.get<Sale>('sales');
+    const sIdx = sales.findIndex(s => s.id === saleId);
+    if (sIdx === -1) return null;
+
+    const sale = sales[sIdx];
+    const newAmountDue = Math.max(0, sale.total - newAmountPaid);
+    
+    sale.payment_method = newPaymentMethod;
+    sale.amount_paid = newAmountPaid;
+    sale.amount_due = newAmountDue;
+    if (customerId) sale.customer_id = customerId;
+    if (customerName) sale.customer_name = customerName;
+
+    sales[sIdx] = sale;
+    this.set('sales', sales);
+
+    // Reconcile all customer debts
+    this.reconcileCustomerDebts(businessId);
+
+    this.addAuditLog(
+      businessId,
+      userName,
+      'تعديل حالة دفع الفاتورة',
+      `تعديل الفاتورة ${sale.invoice_number}: طريقة الدفع ${newPaymentMethod}، المبلغ المدفوع ${newAmountPaid} DH، الباقي ${newAmountDue} DH`
     );
 
     return sale;

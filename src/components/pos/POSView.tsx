@@ -6,6 +6,7 @@ import {
   Plus, 
   Minus, 
   UserCheck, 
+  User,
   CheckCircle2, 
   CreditCard, 
   Wallet, 
@@ -135,14 +136,14 @@ export const POSView: React.FC = () => {
   const handleFinalizeSale = () => {
     if (cart.length === 0) return;
 
-    if (creditRemaining > 0 && !cartCustomer) {
+    const isCredit = selectedMethod === 'CREDIT';
+    const actualAmountPaid = isCredit ? 0 : Math.min(paidAmountNumber, cartTotals.total);
+    const finalAmountDue = isCredit ? cartTotals.total : Math.max(0, cartTotals.total - actualAmountPaid);
+
+    if (finalAmountDue > 0 && !cartCustomer) {
       alert(lang === 'ar' ? '⚠️ يرجى تحديد العميل أولاً لتسجيل عملية البيع بالدين (الكريدي) أو المبلغ المتبقي في حسابه!' : '⚠️ Veuillez d\'abord sélectionner un client pour enregistrer la vente à crédit ou le montant restant sur son compte !');
       return;
     }
-
-    const actualAmountPaid = selectedMethod === 'CREDIT' 
-      ? 0 
-      : Math.min(paidAmountNumber, cartTotals.total);
 
     const invoiceNumber = db.generateNextInvoiceNumber(business.id);
 
@@ -158,7 +159,7 @@ export const POSView: React.FC = () => {
       tax_total: cartTotals.taxTotal,
       total: cartTotals.total,
       amount_paid: actualAmountPaid,
-      amount_due: creditRemaining,
+      amount_due: finalAmountDue,
       payment_method: selectedMethod,
       status: 'COMPLETED',
       user_name: user.name,
@@ -180,6 +181,14 @@ export const POSView: React.FC = () => {
 
     // Save transaction in database
     db.createSale(newSale);
+
+    // Immediately push customer with updated debt to cloud
+    if (cartCustomer) {
+      const updatedCust = db.getCustomerById(cartCustomer.id);
+      if (updatedCust) {
+        syncEngine.saveCustomerEverywhere(updatedCust).catch(() => {});
+      }
+    }
     syncEngine.syncAll().then(refreshData).catch(() => {});
 
     // Supermarket feedback
@@ -639,11 +648,27 @@ export const POSView: React.FC = () => {
               </button>
             </div>
 
+            {/* Customer info header in payment modal if selected */}
+            {cartCustomer && (
+              <div className="mb-3.5 p-2.5 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-teal-600" />
+                  <span className="font-extrabold text-slate-800 dark:text-slate-200">{cartCustomer.name}</span>
+                </div>
+                <div className="text-amber-600 dark:text-amber-400 font-bold">
+                  {lang === 'ar' ? 'كريدي سابق:' : 'Crédit précédent :'} {formatCurrency(cartCustomer.total_debt)}
+                </div>
+              </div>
+            )}
+
             {/* Payment Method Selector */}
             <div className="grid grid-cols-3 gap-2 mb-4">
               <button
                 type="button"
-                onClick={() => setSelectedMethod('CASH')}
+                onClick={() => {
+                  setSelectedMethod('CASH');
+                  setAmountPaidInput(cartTotals.total.toString());
+                }}
                 className={`p-3 rounded-2xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
                   selectedMethod === 'CASH'
                     ? 'bg-teal-50 dark:bg-teal-950/60 border-teal-500 text-teal-900 dark:text-teal-200 font-bold ring-2 ring-teal-500'
@@ -656,7 +681,13 @@ export const POSView: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => setSelectedMethod('CREDIT')}
+                onClick={() => {
+                  setSelectedMethod('CREDIT');
+                  setAmountPaidInput('0');
+                  if (!cartCustomer) {
+                    setCustomerModalOpen(true);
+                  }
+                }}
                 className={`p-3 rounded-2xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
                   selectedMethod === 'CREDIT'
                     ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-200 font-bold ring-2 ring-amber-500'
@@ -664,12 +695,15 @@ export const POSView: React.FC = () => {
                 }`}
               >
                 <DollarSign className="w-5 h-5 text-amber-600" />
-                <span className="text-xs">{lang === 'ar' ? 'كريدي (دفتر)' : 'Crédit (Dette)'}</span>
+                <span className="text-xs font-black">{lang === 'ar' ? 'كريدي (دفتر)' : 'Crédit (Dette)'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setSelectedMethod('CARD')}
+                onClick={() => {
+                  setSelectedMethod('CARD');
+                  setAmountPaidInput(cartTotals.total.toString());
+                }}
                 className={`p-3 rounded-2xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
                   selectedMethod === 'CARD'
                     ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-900 dark:text-blue-200 font-bold ring-2 ring-blue-500'

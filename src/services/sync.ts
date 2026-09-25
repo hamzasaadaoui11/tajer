@@ -63,6 +63,10 @@ class SyncEngine {
       const bizId = init.business.id;
       const branchId = init.branch.id;
 
+      // Reconcile debts locally before any push
+      db.reconcileCustomerDebts(bizId);
+      db.reconcileSupplierDebts(bizId);
+
       // ==========================================
       // PHASE 1: FLUSH PENDING DELETIONS TO CLOUD FIRST
       // ==========================================
@@ -115,359 +119,7 @@ class SyncEngine {
       }
 
       // ==========================================
-      // PHASE 2: PULL MASTER DATA & SYNC DELETIONS FROM CLOUD
-      // ==========================================
-
-      // 2.0 Pull persistent tombstones from deleted_records if available
-      try {
-        const { data: remoteDeletes } = await supabase
-          .from('deleted_records')
-          .select('record_id, table_name')
-          .eq('business_id', bizId);
-
-        if (remoteDeletes && remoteDeletes.length > 0) {
-          for (const dr of remoteDeletes) {
-            if (dr.table_name === 'products') {
-              db.removeProductLocally(dr.record_id);
-              processed++;
-            } else if (dr.table_name === 'categories') {
-              db.removeCategoryLocally(dr.record_id);
-              processed++;
-            } else if (dr.table_name === 'customers') {
-              db.removeCustomerLocally(dr.record_id);
-              processed++;
-            } else if (dr.table_name === 'suppliers') {
-              db.removeSupplierLocally(dr.record_id);
-              processed++;
-            }
-          }
-        }
-      } catch (e) {
-        // deleted_records table is optional until user runs the SQL migration script
-      }
-
-      // 2.1 Pull Categories
-      try {
-        const { data: remoteCategories, error: catPullErr } = await supabase
-          .from('categories')
-          .select('*')
-          .eq('business_id', bizId);
-        if (!catPullErr && remoteCategories) {
-          const remoteIds = new Set<string>((remoteCategories as any[]).map((rc: any) => rc.id as string));
-          const pendingCatCreates = new Set(db.getPendingCreates('categories'));
-          const tombstones = new Set(db.getTombstones('categories'));
-          const pendingDeletes = new Set(db.getDeleteQueue('categories'));
-          const syncedCatIds = new Set(db.getSyncedIds('categories'));
-
-          // Filter local categories: remove if deleted remotely or tombstoned
-          const localCats = db.getCategories(bizId);
-          const filteredLocal = localCats.filter(c => {
-            if (pendingDeletes.has(c.id) || tombstones.has(c.id)) return false;
-            if (remoteIds.has(c.id)) return true;
-            
-            // If never synced to cloud, it is a new local item created on this device! Always keep it!
-            const wasSynced = syncedCatIds.has(c.id);
-            if (!wasSynced) return true;
-
-            // Only if previously synced and now absent from remote, it was deleted on another device!
-            db.addToTombstones('categories', c.id);
-            db.removePendingCreate('categories', c.id);
-            db.removeSyncedId('categories', c.id);
-            processed++;
-            return false;
-          });
-
-          if (filteredLocal.length !== localCats.length) {
-            db.set('categories', filteredLocal);
-            processed++;
-          }
-
-          // Save/update remote categories locally
-          for (const rc of remoteCategories) {
-            if (pendingDeletes.has(rc.id) || tombstones.has(rc.id)) continue;
-
-            const existing = filteredLocal.find(lc => lc.id === rc.id);
-            if (!existing || existing.name !== rc.name || existing.color !== rc.color) {
-              processed++;
-            }
-
-            db.saveCategory({
-              id: rc.id,
-              business_id: rc.business_id,
-              name: rc.name,
-              color: rc.color || '#0d9488',
-              icon: rc.icon || 'tag',
-              created_at: rc.created_at || new Date().toISOString(),
-            });
-          }
-
-          db.setSyncedIds('categories', Array.from(remoteIds));
-        }
-      } catch (e) {
-        console.warn('Pull categories notice:', e);
-      }
-
-      // 2.2 Pull Products & Delete any removed on other devices
-      try {
-        const { data: remoteProducts, error: prodPullErr } = await supabase
-          .from('products')
-          .select('*')
-          .eq('business_id', bizId);
-
-        if (!prodPullErr && remoteProducts) {
-          const remoteIds = new Set<string>((remoteProducts as any[]).map((rp: any) => rp.id as string));
-          const pendingProdCreates = new Set(db.getPendingCreates('products'));
-          const tombstones = new Set(db.getTombstones('products'));
-          const pendingDeletes = new Set(db.getDeleteQueue('products'));
-          const syncedProdIds = new Set(db.getSyncedIds('products'));
-
-          // Filter local products: remove if deleted on another device, deactivated, or tombstoned
-          const localProds = db.getProducts(bizId);
-          const filteredLocal = localProds.filter(p => {
-            if (pendingDeletes.has(p.id) || tombstones.has(p.id) || p.is_active === false) return false;
-            if (remoteIds.has(p.id)) return true;
-            
-            // If never synced to cloud, it is a new local product created on this device! Always keep it!
-            const wasSynced = syncedProdIds.has(p.id);
-            if (!wasSynced) return true;
-
-            // If it was in the cloud before and now absent, it was deleted on another device!
-            db.addToTombstones('products', p.id);
-            db.removePendingCreate('products', p.id);
-            db.removeSyncedId('products', p.id);
-            processed++;
-            return false;
-          });
-
-          if (filteredLocal.length !== localProds.length) {
-            db.set('products', filteredLocal);
-            processed++;
-          }
-
-          // Save/update remote products locally
-          for (const rp of remoteProducts) {
-            if (pendingDeletes.has(rp.id) || tombstones.has(rp.id)) continue;
-            if (rp.is_active === false) {
-              // Product was deactivated/soft-deleted on remote! Prune locally
-              db.addToTombstones('products', rp.id);
-              continue;
-            }
-
-            const existing = filteredLocal.find(lp => lp.id === rp.id);
-            if (!existing || 
-                existing.name !== rp.name || 
-                existing.current_stock !== Number(rp.current_stock) || 
-                existing.sale_price !== Number(rp.sale_price) || 
-                existing.purchase_price !== Number(rp.purchase_price) || 
-                existing.barcode !== rp.barcode ||
-                existing.sku !== rp.sku ||
-                existing.category_id !== rp.category_id ||
-                existing.is_active !== (rp.is_active !== false)
-            ) {
-              processed++;
-            }
-
-            db.saveProduct({
-              id: rp.id,
-              business_id: rp.business_id,
-              branch_id: rp.branch_id || branchId,
-              category_id: rp.category_id,
-              barcode: rp.barcode || '',
-              sku: rp.sku || '',
-              name: rp.name,
-              description: rp.description,
-              purchase_price: Number(rp.purchase_price || 0),
-              sale_price: Number(rp.sale_price || 0),
-              wholesale_price: rp.wholesale_price ? Number(rp.wholesale_price) : undefined,
-              current_stock: Number(rp.current_stock || 0),
-              min_stock: Number(rp.min_stock || 0),
-              unit: rp.unit || 'قطعة',
-              tax_rate: Number(rp.tax_rate ?? 20),
-              is_active: rp.is_active !== false,
-              image_url: rp.image_url,
-              created_at: rp.created_at || new Date().toISOString(),
-              updated_at: rp.updated_at || new Date().toISOString(),
-            }, 'مزامنة السحابة', true);
-          }
-
-          db.setSyncedIds('products', Array.from(remoteIds));
-        }
-      } catch (e) {
-        console.warn('Pull products notice:', e);
-      }
-
-      // 2.3 Pull Customers & Delete any removed on other devices
-      try {
-        await supabase
-          .from('customers')
-          .delete()
-          .eq('business_id', bizId)
-          .in('name', ['السيد أحمد الإدريسي', 'السيدة فاطمة الزهراء العلوي', 'مقهى الأندلس (السيد رشيد)']);
-        await supabase
-          .from('customers')
-          .delete()
-          .in('id', ['cust-1', 'cust-2', 'cust-3']);
-
-        const { data: remoteCustomers, error: custPullErr } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('business_id', bizId);
-        if (!custPullErr && remoteCustomers) {
-          const remoteIds = new Set<string>((remoteCustomers as any[]).map((rc: any) => rc.id as string));
-          const pendingCustCreates = new Set(db.getPendingCreates('customers'));
-          const tombstones = new Set(db.getTombstones('customers'));
-          const pendingDeletes = new Set(db.getDeleteQueue('customers'));
-          const syncedCustIds = new Set(db.getSyncedIds('customers'));
-
-          // Filter local customers: remove if deleted on another device
-          const localCusts = db.getCustomers(bizId);
-          const filteredLocal = localCusts.filter(c => {
-            if (pendingDeletes.has(c.id) || tombstones.has(c.id)) return false;
-            if (remoteIds.has(c.id)) return true;
-
-            // If never synced to cloud, it is a new local customer created on this device! Always keep it!
-            const wasSynced = syncedCustIds.has(c.id);
-            if (!wasSynced) return true;
-
-            db.addToTombstones('customers', c.id);
-            db.removePendingCreate('customers', c.id);
-            db.removeSyncedId('customers', c.id);
-            processed++;
-            return false;
-          });
-
-          if (filteredLocal.length !== localCusts.length) {
-            db.set('customers', filteredLocal);
-            processed++;
-          }
-
-          const forbiddenCustNames = new Set([
-            'السيد أحمد الإدريسي',
-            'السيدة فاطمة الزهراء العلوي',
-            'مقهى الأندلس (السيد رشيد)'
-          ]);
-
-          for (const rc of remoteCustomers) {
-            if (['cust-1', 'cust-2', 'cust-3'].includes(rc.id) || forbiddenCustNames.has(rc.name)) {
-              continue;
-            }
-            if (pendingDeletes.has(rc.id) || tombstones.has(rc.id)) continue;
-
-            const existing = filteredLocal.find(lc => lc.id === rc.id);
-            if (!existing || existing.name !== rc.name || existing.phone !== rc.phone || existing.total_debt !== Number(rc.total_debt)) {
-              processed++;
-            }
-
-            db.saveCustomer({
-              id: rc.id,
-              business_id: rc.business_id,
-              name: rc.name,
-              phone: rc.phone || '',
-              address: rc.address,
-              city: rc.city,
-              ice: rc.ice,
-              ifNumber: rc.if_number,
-              notes: rc.notes,
-              credit_limit: Number(rc.credit_limit || 0),
-              total_spent: Number(rc.total_spent || 0),
-              total_debt: Number(rc.total_debt || 0),
-              created_at: rc.created_at || new Date().toISOString(),
-              updated_at: rc.updated_at || new Date().toISOString(),
-            });
-          }
-
-          db.setSyncedIds('customers', Array.from(remoteIds));
-        }
-      } catch (e) {
-        console.warn('Pull customers notice:', e);
-      }
-
-      // 2.4 Pull Suppliers & Delete any removed on other devices
-      try {
-        await supabase
-          .from('suppliers')
-          .delete()
-          .eq('business_id', bizId)
-          .in('name', ['شركة توزيع الألبان المركزية', 'شركة التوزيع السريع المغرب', 'مجموعة المشروبات والمياه المعدنية']);
-        await supabase
-          .from('suppliers')
-          .delete()
-          .in('id', ['sup-1', 'sup-2']);
-
-        const { data: remoteSuppliers, error: suppPullErr } = await supabase
-          .from('suppliers')
-          .select('*')
-          .eq('business_id', bizId);
-        if (!suppPullErr && remoteSuppliers) {
-          const remoteIds = new Set<string>((remoteSuppliers as any[]).map((rs: any) => rs.id as string));
-          const pendingSuppCreates = new Set(db.getPendingCreates('suppliers'));
-          const tombstones = new Set(db.getTombstones('suppliers'));
-          const pendingDeletes = new Set(db.getDeleteQueue('suppliers'));
-          const syncedSuppIds = new Set(db.getSyncedIds('suppliers'));
-
-          // Filter local suppliers: remove if deleted on another device
-          const localSupps = db.getSuppliers(bizId);
-          const filteredLocal = localSupps.filter(s => {
-            if (pendingDeletes.has(s.id) || tombstones.has(s.id)) return false;
-            if (remoteIds.has(s.id)) return true;
-
-            // If never synced to cloud, it is a new local supplier created on this device! Always keep it!
-            const wasSynced = syncedSuppIds.has(s.id);
-            if (!wasSynced) return true;
-
-            db.addToTombstones('suppliers', s.id);
-            db.removePendingCreate('suppliers', s.id);
-            db.removeSyncedId('suppliers', s.id);
-            processed++;
-            return false;
-          });
-
-          if (filteredLocal.length !== localSupps.length) {
-            db.set('suppliers', filteredLocal);
-            processed++;
-          }
-
-          const forbiddenSuppNames = new Set([
-            'شركة توزيع الألبان المركزية',
-            'شركة التوزيع السريع المغرب',
-            'مجموعة المشروبات والمياه المعدنية'
-          ]);
-          for (const rs of remoteSuppliers) {
-            if (['sup-1', 'sup-2'].includes(rs.id) || forbiddenSuppNames.has(rs.name)) {
-              continue;
-            }
-            if (pendingDeletes.has(rs.id) || tombstones.has(rs.id)) continue;
-
-            const existing = filteredLocal.find(ls => ls.id === rs.id);
-            if (!existing || existing.name !== rs.name || existing.phone !== rs.phone || existing.total_debt !== Number(rs.total_debt)) {
-              processed++;
-            }
-
-            db.saveSupplier({
-              id: rs.id,
-              business_id: rs.business_id,
-              name: rs.name,
-              phone: rs.phone || '',
-              address: rs.address,
-              city: rs.city,
-              ice: rs.ice,
-              ifNumber: rs.if_number,
-              notes: rs.notes,
-              total_purchased: Number(rs.total_purchased || 0),
-              total_debt: Number(rs.total_debt || 0),
-              created_at: rs.created_at || new Date().toISOString(),
-              updated_at: rs.updated_at || new Date().toISOString(),
-            });
-          }
-
-          db.setSyncedIds('suppliers', Array.from(remoteIds));
-        }
-      } catch (e) {
-        console.warn('Pull suppliers notice:', e);
-      }
-
-      // ==========================================
-      // PHASE C: PUSH CURRENT LOCAL DATA TO SERVER
+      // PHASE 2: PUSH CURRENT LOCAL DATA TO SERVER
       // ==========================================
 
       // C1. Push Business Profile
@@ -877,6 +529,379 @@ class SyncEngine {
       }
 
       // ==========================================
+      // PHASE 3: PULL MASTER DATA & SYNC DELETIONS FROM CLOUD
+      // ==========================================
+
+      // 2.0 Pull persistent tombstones from deleted_records if available
+      try {
+        const { data: remoteDeletes } = await supabase
+          .from('deleted_records')
+          .select('record_id, table_name')
+          .eq('business_id', bizId);
+
+        if (remoteDeletes && remoteDeletes.length > 0) {
+          for (const dr of remoteDeletes) {
+            if (dr.table_name === 'products') {
+              db.removeProductLocally(dr.record_id);
+              processed++;
+            } else if (dr.table_name === 'categories') {
+              db.removeCategoryLocally(dr.record_id);
+              processed++;
+            } else if (dr.table_name === 'customers') {
+              db.removeCustomerLocally(dr.record_id);
+              processed++;
+            } else if (dr.table_name === 'suppliers') {
+              db.removeSupplierLocally(dr.record_id);
+              processed++;
+            }
+          }
+        }
+      } catch (e) {
+        // deleted_records table is optional until user runs the SQL migration script
+      }
+
+      // 2.1 Pull Categories
+      try {
+        const { data: remoteCategories, error: catPullErr } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('business_id', bizId);
+        if (!catPullErr && remoteCategories) {
+          const remoteIds = new Set<string>((remoteCategories as any[]).map((rc: any) => rc.id as string));
+          const pendingCatCreates = new Set(db.getPendingCreates('categories'));
+          const tombstones = new Set(db.getTombstones('categories'));
+          const pendingDeletes = new Set(db.getDeleteQueue('categories'));
+          const syncedCatIds = new Set(db.getSyncedIds('categories'));
+
+          // Filter local categories: remove if deleted remotely or tombstoned
+          const localCats = db.getCategories(bizId);
+          const filteredLocal = localCats.filter(c => {
+            if (pendingDeletes.has(c.id) || tombstones.has(c.id)) return false;
+            if (remoteIds.has(c.id)) return true;
+            
+            // If never synced to cloud, it is a new local item created on this device! Always keep it!
+            const wasSynced = syncedCatIds.has(c.id);
+            if (!wasSynced) return true;
+
+            // Only if previously synced and now absent from remote, it was deleted on another device!
+            db.addToTombstones('categories', c.id);
+            db.removePendingCreate('categories', c.id);
+            db.removeSyncedId('categories', c.id);
+            processed++;
+            return false;
+          });
+
+          if (filteredLocal.length !== localCats.length) {
+            db.set('categories', filteredLocal);
+            processed++;
+          }
+
+          // Save/update remote categories locally
+          for (const rc of remoteCategories) {
+            if (pendingDeletes.has(rc.id) || tombstones.has(rc.id)) continue;
+
+            const existing = filteredLocal.find(lc => lc.id === rc.id);
+            if (existing) {
+              const localTime = (existing as any).updated_at ? new Date((existing as any).updated_at).getTime() : 0;
+              const remoteTime = rc.updated_at ? new Date(rc.updated_at).getTime() : 0;
+              if (localTime > remoteTime) {
+                continue;
+              }
+            }
+            if (!existing || existing.name !== rc.name || existing.color !== rc.color) {
+              processed++;
+            }
+
+            db.saveCategory({
+              id: rc.id,
+              business_id: rc.business_id,
+              name: rc.name,
+              color: rc.color || '#0d9488',
+              icon: rc.icon || 'tag',
+              created_at: rc.created_at || new Date().toISOString(),
+            });
+          }
+
+          db.setSyncedIds('categories', Array.from(remoteIds));
+        }
+      } catch (e) {
+        console.warn('Pull categories notice:', e);
+      }
+
+      // 2.2 Pull Products & Delete any removed on other devices
+      try {
+        const { data: remoteProducts, error: prodPullErr } = await supabase
+          .from('products')
+          .select('*')
+          .eq('business_id', bizId);
+
+        if (!prodPullErr && remoteProducts) {
+          const remoteIds = new Set<string>((remoteProducts as any[]).map((rp: any) => rp.id as string));
+          const pendingProdCreates = new Set(db.getPendingCreates('products'));
+          const tombstones = new Set(db.getTombstones('products'));
+          const pendingDeletes = new Set(db.getDeleteQueue('products'));
+          const syncedProdIds = new Set(db.getSyncedIds('products'));
+
+          // Filter local products: remove if deleted on another device, deactivated, or tombstoned
+          const localProds = db.getProducts(bizId);
+          const filteredLocal = localProds.filter(p => {
+            if (pendingDeletes.has(p.id) || tombstones.has(p.id) || p.is_active === false) return false;
+            if (remoteIds.has(p.id)) return true;
+            
+            // If never synced to cloud, it is a new local product created on this device! Always keep it!
+            const wasSynced = syncedProdIds.has(p.id);
+            if (!wasSynced) return true;
+
+            // If it was in the cloud before and now absent, it was deleted on another device!
+            db.addToTombstones('products', p.id);
+            db.removePendingCreate('products', p.id);
+            db.removeSyncedId('products', p.id);
+            processed++;
+            return false;
+          });
+
+          if (filteredLocal.length !== localProds.length) {
+            db.set('products', filteredLocal);
+            processed++;
+          }
+
+          // Save/update remote products locally
+          for (const rp of remoteProducts) {
+            if (pendingDeletes.has(rp.id) || tombstones.has(rp.id)) continue;
+            if (rp.is_active === false) {
+              // Product was deactivated/soft-deleted on remote! Prune locally
+              db.addToTombstones('products', rp.id);
+              continue;
+            }
+
+            const existing = filteredLocal.find(lp => lp.id === rp.id);
+            if (existing) {
+              const localTime = existing.updated_at ? new Date(existing.updated_at).getTime() : 0;
+              const remoteTime = rp.updated_at ? new Date(rp.updated_at).getTime() : 0;
+              if (localTime > remoteTime) {
+                continue;
+              }
+            }
+            if (!existing || 
+                existing.name !== rp.name || 
+                existing.current_stock !== Number(rp.current_stock) || 
+                existing.sale_price !== Number(rp.sale_price) || 
+                existing.purchase_price !== Number(rp.purchase_price) || 
+                existing.barcode !== rp.barcode ||
+                existing.sku !== rp.sku ||
+                existing.category_id !== rp.category_id ||
+                existing.is_active !== (rp.is_active !== false)
+            ) {
+              processed++;
+            }
+
+            db.saveProduct({
+              id: rp.id,
+              business_id: rp.business_id,
+              branch_id: rp.branch_id || branchId,
+              category_id: rp.category_id,
+              barcode: rp.barcode || '',
+              sku: rp.sku || '',
+              name: rp.name,
+              description: rp.description,
+              purchase_price: Number(rp.purchase_price || 0),
+              sale_price: Number(rp.sale_price || 0),
+              wholesale_price: rp.wholesale_price ? Number(rp.wholesale_price) : undefined,
+              current_stock: Number(rp.current_stock || 0),
+              min_stock: Number(rp.min_stock || 0),
+              unit: rp.unit || 'قطعة',
+              tax_rate: Number(rp.tax_rate ?? 20),
+              is_active: rp.is_active !== false,
+              image_url: rp.image_url,
+              created_at: rp.created_at || new Date().toISOString(),
+              updated_at: rp.updated_at || new Date().toISOString(),
+            }, 'مزامنة السحابة', true);
+          }
+
+          db.setSyncedIds('products', Array.from(remoteIds));
+        }
+      } catch (e) {
+        console.warn('Pull products notice:', e);
+      }
+
+      // 2.3 Pull Customers & Delete any removed on other devices
+      try {
+        await supabase
+          .from('customers')
+          .delete()
+          .eq('business_id', bizId)
+          .in('name', ['السيد أحمد الإدريسي', 'السيدة فاطمة الزهراء العلوي', 'مقهى الأندلس (السيد رشيد)']);
+        await supabase
+          .from('customers')
+          .delete()
+          .in('id', ['cust-1', 'cust-2', 'cust-3']);
+
+        const { data: remoteCustomers, error: custPullErr } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('business_id', bizId);
+        if (!custPullErr && remoteCustomers) {
+          const remoteIds = new Set<string>((remoteCustomers as any[]).map((rc: any) => rc.id as string));
+          const pendingCustCreates = new Set(db.getPendingCreates('customers'));
+          const tombstones = new Set(db.getTombstones('customers'));
+          const pendingDeletes = new Set(db.getDeleteQueue('customers'));
+          const syncedCustIds = new Set(db.getSyncedIds('customers'));
+
+          // Filter local customers: remove if deleted on another device
+          const localCusts = db.getCustomers(bizId);
+          const filteredLocal = localCusts.filter(c => {
+            if (pendingDeletes.has(c.id) || tombstones.has(c.id)) return false;
+            if (remoteIds.has(c.id)) return true;
+
+            // If never synced to cloud, it is a new local customer created on this device! Always keep it!
+            const wasSynced = syncedCustIds.has(c.id);
+            if (!wasSynced) return true;
+
+            db.addToTombstones('customers', c.id);
+            db.removePendingCreate('customers', c.id);
+            db.removeSyncedId('customers', c.id);
+            processed++;
+            return false;
+          });
+
+          if (filteredLocal.length !== localCusts.length) {
+            db.set('customers', filteredLocal);
+            processed++;
+          }
+
+          const forbiddenCustNames = new Set([
+            'السيد أحمد الإدريسي',
+            'السيدة فاطمة الزهراء العلوي',
+            'مقهى الأندلس (السيد رشيد)'
+          ]);
+
+          for (const rc of remoteCustomers) {
+            if (['cust-1', 'cust-2', 'cust-3'].includes(rc.id) || forbiddenCustNames.has(rc.name)) {
+              continue;
+            }
+            if (pendingDeletes.has(rc.id) || tombstones.has(rc.id)) continue;
+
+            const existing = filteredLocal.find(lc => lc.id === rc.id);
+            if (!existing || existing.name !== rc.name || existing.phone !== rc.phone || existing.total_debt !== Number(rc.total_debt)) {
+              processed++;
+            }
+
+            db.saveCustomer({
+              id: rc.id,
+              business_id: rc.business_id,
+              name: rc.name,
+              phone: rc.phone || '',
+              address: rc.address,
+              city: rc.city,
+              ice: rc.ice,
+              ifNumber: rc.if_number,
+              notes: rc.notes,
+              credit_limit: Number(rc.credit_limit || 0),
+              total_spent: Number(rc.total_spent || 0),
+              total_debt: Number(rc.total_debt || 0),
+              created_at: rc.created_at || new Date().toISOString(),
+              updated_at: rc.updated_at || new Date().toISOString(),
+            });
+          }
+
+          db.setSyncedIds('customers', Array.from(remoteIds));
+        }
+      } catch (e) {
+        console.warn('Pull customers notice:', e);
+      }
+
+      // 2.4 Pull Suppliers & Delete any removed on other devices
+      try {
+        await supabase
+          .from('suppliers')
+          .delete()
+          .eq('business_id', bizId)
+          .in('name', ['شركة توزيع الألبان المركزية', 'شركة التوزيع السريع المغرب', 'مجموعة المشروبات والمياه المعدنية']);
+        await supabase
+          .from('suppliers')
+          .delete()
+          .in('id', ['sup-1', 'sup-2']);
+
+        const { data: remoteSuppliers, error: suppPullErr } = await supabase
+          .from('suppliers')
+          .select('*')
+          .eq('business_id', bizId);
+        if (!suppPullErr && remoteSuppliers) {
+          const remoteIds = new Set<string>((remoteSuppliers as any[]).map((rs: any) => rs.id as string));
+          const pendingSuppCreates = new Set(db.getPendingCreates('suppliers'));
+          const tombstones = new Set(db.getTombstones('suppliers'));
+          const pendingDeletes = new Set(db.getDeleteQueue('suppliers'));
+          const syncedSuppIds = new Set(db.getSyncedIds('suppliers'));
+
+          // Filter local suppliers: remove if deleted on another device
+          const localSupps = db.getSuppliers(bizId);
+          const filteredLocal = localSupps.filter(s => {
+            if (pendingDeletes.has(s.id) || tombstones.has(s.id)) return false;
+            if (remoteIds.has(s.id)) return true;
+
+            // If never synced to cloud, it is a new local supplier created on this device! Always keep it!
+            const wasSynced = syncedSuppIds.has(s.id);
+            if (!wasSynced) return true;
+
+            db.addToTombstones('suppliers', s.id);
+            db.removePendingCreate('suppliers', s.id);
+            db.removeSyncedId('suppliers', s.id);
+            processed++;
+            return false;
+          });
+
+          if (filteredLocal.length !== localSupps.length) {
+            db.set('suppliers', filteredLocal);
+            processed++;
+          }
+
+          const forbiddenSuppNames = new Set([
+            'شركة توزيع الألبان المركزية',
+            'شركة التوزيع السريع المغرب',
+            'مجموعة المشروبات والمياه المعدنية'
+          ]);
+          for (const rs of remoteSuppliers) {
+            if (['sup-1', 'sup-2'].includes(rs.id) || forbiddenSuppNames.has(rs.name)) {
+              continue;
+            }
+            if (pendingDeletes.has(rs.id) || tombstones.has(rs.id)) continue;
+
+            const existing = filteredLocal.find(ls => ls.id === rs.id);
+            if (existing) {
+              const localTime = existing.updated_at ? new Date(existing.updated_at).getTime() : 0;
+              const remoteTime = rs.updated_at ? new Date(rs.updated_at).getTime() : 0;
+              if (localTime > remoteTime) {
+                continue;
+              }
+            }
+            if (!existing || existing.name !== rs.name || existing.phone !== rs.phone || existing.total_debt !== Number(rs.total_debt)) {
+              processed++;
+            }
+
+            db.saveSupplier({
+              id: rs.id,
+              business_id: rs.business_id,
+              name: rs.name,
+              phone: rs.phone || '',
+              address: rs.address,
+              city: rs.city,
+              ice: rs.ice,
+              ifNumber: rs.if_number,
+              notes: rs.notes,
+              total_purchased: Number(rs.total_purchased || 0),
+              total_debt: Number(rs.total_debt || 0),
+              created_at: rs.created_at || new Date().toISOString(),
+              updated_at: rs.updated_at || new Date().toISOString(),
+            });
+          }
+
+          db.setSyncedIds('suppliers', Array.from(remoteIds));
+        }
+      } catch (e) {
+        console.warn('Pull suppliers notice:', e);
+      }
+
+      // ==========================================
       // PHASE D: PULL APPEND-ONLY HISTORICAL DATA
       // ==========================================
 
@@ -1003,6 +1028,50 @@ class SyncEngine {
         console.warn('Pull cash notice:', e);
       }
 
+
+      // D4. Pull Remote Payment Transactions
+      try {
+        const { data: remotePayments } = await supabase
+          .from('payment_transactions')
+          .select('*')
+          .eq('business_id', bizId)
+          .order('created_at', { ascending: false })
+          .limit(200);
+
+        if (remotePayments && remotePayments.length > 0) {
+          const localPay = db.getPaymentTransactions(bizId);
+          const localPayIds = new Set(localPay.map(p => p.id));
+          const toAddPay: any[] = [];
+
+          for (const rp of remotePayments) {
+            if (!localPayIds.has(rp.id)) {
+              toAddPay.push({
+                id: rp.id,
+                business_id: rp.business_id,
+                branch_id: rp.branch_id || branchId,
+                type: rp.type,
+                entity_id: rp.entity_id,
+                entity_name: rp.entity_name,
+                reference_id: rp.reference_id,
+                amount: Number(rp.amount || 0),
+                payment_method: rp.payment_method || 'CASH',
+                notes: rp.notes,
+                user_name: rp.user_name,
+                created_at: rp.created_at || new Date().toISOString(),
+              });
+            }
+          }
+          if (toAddPay.length > 0) {
+            db.set('payments', [...toAddPay, ...localPay]);
+          }
+        }
+      } catch (e) {
+        console.warn('Pull payments notice:', e);
+      }
+
+      // Reconcile all customer and supplier debts based on synced transactions
+      db.reconcileCustomerDebts(bizId);
+      db.reconcileSupplierDebts(bizId);
       return {
         success: errors.length === 0,
         processed,
