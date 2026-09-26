@@ -158,8 +158,8 @@ export const ProductsView: React.FC = () => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 450;
-          const MAX_HEIGHT = 450;
+          const MAX_WIDTH = 640;
+          const MAX_HEIGHT = 640;
           let width = img.width;
           let height = img.height;
 

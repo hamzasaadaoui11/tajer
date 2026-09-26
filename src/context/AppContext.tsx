@@ -746,6 +746,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = { ...business, ...bizData };
     setBusinessState(updated);
     db.saveBusiness(updated);
+    if (user && bizData.name) {
+      const updatedUser = { ...user, name: bizData.name };
+      setUserState(updatedUser);
+      db.saveUser(updatedUser);
+    }
     refreshData();
   };
 

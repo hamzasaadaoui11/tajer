@@ -77,7 +77,7 @@ export const OnboardingView: React.FC = () => {
       }
 
       // 3. Mark onboarding complete in AppContext
-      completeOnboarding(updated);
+      completeOnboarding(updated, { name: storeName.trim() || 'متجر البركة' });
     } catch (e) {
       console.error('Error completing onboarding:', e);
       setIsFinishing(false);

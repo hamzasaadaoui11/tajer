@@ -299,11 +299,11 @@ class LocalDatabase {
       };
 
       const initialUser: User = {
-        id: 'usr-' + Math.random().toString(36).substring(2, 9),
+        id: 'usr-' + (customUser?.id ? customUser.id.substring(0, 8) : Math.random().toString(36).substring(2, 9)),
         business_id: initialBusiness.id,
         branch_id: initialBranch.id,
-        name: 'حمزة (المدير العام)',
-        email: 'admin@tajer.ma',
+        name: customUser?.name ? customUser.name : defaultStoreName,
+        email: customUser?.email ? customUser.email : 'admin@tajer.ma',
         phone: '06 61 00 11 22',
         role: 'ADMIN',
         is_active: true,
@@ -354,6 +354,13 @@ class LocalDatabase {
 
       // Initial audit log
       this.addAuditLog(initialBusiness.id, initialUser.name, 'إنشاء متجر جديد', `تم إنشاء المتجر وتجهيز البيانات الافتراضية`);
+    }
+
+    // Migration for existing users: If the user name is still "حمزة" or starts with "حمزة", update it to the store's name
+    if (users.length > 0 && (users[0].name === 'حمزة (المدير العام)' || users[0].name.startsWith('حمزة'))) {
+      const bizName = businesses[0]?.name || 'المدير العام';
+      users[0].name = bizName;
+      this.set('users', users);
     }
 
     return {
