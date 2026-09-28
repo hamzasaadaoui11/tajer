@@ -65,6 +65,10 @@ export const ProductsView: React.FC = () => {
   const [originalSize, setOriginalSize] = useState('');
   const [compressedSize, setCompressedSize] = useState('');
 
+  // Inline Quick Add Category State
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickCatName, setQuickCatName] = useState('');
+
   // Physical Inventory Adjustment Modal
   const [adjustModalProduct, setAdjustModalProduct] = useState<Product | null>(null);
   const [countedQty, setCountedQty] = useState('');
@@ -206,6 +210,46 @@ export const ProductsView: React.FC = () => {
   const pSale = parseFloat(salePrice) || 0;
   const profitMargin = pSale - pCost;
   const marginPercent = pCost > 0 ? ((profitMargin / pCost) * 100).toFixed(1) : '100';
+
+  // Save inline category creation
+  const handleSaveQuickCategory = () => {
+    if (!quickCatName.trim()) return;
+
+    const trimmedName = quickCatName.trim();
+
+    // Check if category name already exists
+    const exists = categories.some(c => c.name.toLowerCase() === trimmedName.toLowerCase());
+    if (exists) {
+      alert(lang === 'ar' ? 'هذه الفئة موجودة بالفعل!' : 'Cette catégorie existe déjà !');
+      const existingCat = categories.find(c => c.name.toLowerCase() === trimmedName.toLowerCase());
+      if (existingCat) {
+        setCategoryId(existingCat.id);
+      }
+      setShowQuickAdd(false);
+      setQuickCatName('');
+      return;
+    }
+
+    // Default colors to pick randomly
+    const colors = ['#0284c7', '#ea580c', '#d97706', '#8b5cf6', '#10b981', '#f43f5e', '#ec4899'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const newCategory = {
+      id: 'cat-' + Math.random().toString(36).substring(2, 9),
+      business_id: business.id,
+      name: trimmedName,
+      icon: 'tag',
+      color: randomColor,
+      created_at: new Date().toISOString(),
+    };
+
+    db.saveCategory(newCategory);
+    setCategoryId(newCategory.id);
+    refreshData();
+    setShowQuickAdd(false);
+    setQuickCatName('');
+    alert(lang === 'ar' ? 'تمت إضافة الفئة وتعيينها للمنتج بنجاح!' : 'Catégorie ajoutée et sélectionnée avec succès !');
+  };
 
   // Save product
   const handleSaveProduct = async (e: React.FormEvent) => {
@@ -779,9 +823,18 @@ export const ProductsView: React.FC = () => {
               {/* Category & Unit */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {lang === 'ar' ? 'الفئة / الصنف' : 'Catégorie'}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {lang === 'ar' ? 'الفئة / الصنف' : 'Catégorie'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickAdd(!showQuickAdd)}
+                      className="text-[10px] text-teal-600 hover:text-teal-700 font-extrabold flex items-center gap-0.5 cursor-pointer bg-transparent border-0"
+                    >
+                      {showQuickAdd ? (lang === 'ar' ? 'إلغاء' : 'Annuler') : `+ ${lang === 'ar' ? 'إضافة فئة' : 'Ajouter'}`}
+                    </button>
+                  </div>
                   <select
                     value={categoryId}
                     onChange={e => setCategoryId(e.target.value)}
@@ -812,6 +865,34 @@ export const ProductsView: React.FC = () => {
                   </select>
                 </div>
               </div>
+
+              {/* Quick Add Category inline - Full Width right below Category & Unit */}
+              {showQuickAdd && (
+                <div className="bg-teal-50/50 dark:bg-teal-950/20 p-3 rounded-2xl border border-teal-150 dark:border-teal-900/40 space-y-2 animate-in slide-in-from-top-2 duration-150">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-teal-800 dark:text-teal-300">
+                      {lang === 'ar' ? 'إضافة فئة جديدة سريعة للمحل :' : 'Ajouter une catégorie rapide :'}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder={lang === 'ar' ? 'اكتب اسم الفئة الجديدة هنا...' : 'Ex: Biscuits, Boissons...'}
+                      value={quickCatName}
+                      onChange={e => setQuickCatName(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:ring-1 focus:ring-teal-500 focus:outline-hidden"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveQuickCategory}
+                      className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs shrink-0"
+                    >
+                      {lang === 'ar' ? 'إضافة وحفظ' : 'Ajouter'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Prices & Margins */}
               <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">

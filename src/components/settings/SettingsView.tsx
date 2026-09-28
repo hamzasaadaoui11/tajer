@@ -15,6 +15,8 @@ import {
   Check
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { db } from '../../services/db';
+import { Category } from '../../types';
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -27,10 +29,28 @@ export const SettingsView: React.FC = () => {
     lang,
     logout,
     authEmail,
+    dataVersion,
+    refreshData,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'store' | 'general'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'general' | 'categories'>('store');
   const [storeSection, setStoreSection] = useState<'branding' | 'general' | 'legal' | 'footer'>('branding');
+
+  // New Categories State
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatColor, setNewCatColor] = useState('#0284c7');
+  const [newCatIcon, setNewCatIcon] = useState('tag');
+
+  const categoryColors = [
+    { value: '#0284c7', name: 'Teal/Sky' },
+    { value: '#ea580c', name: 'Orange' },
+    { value: '#d97706', name: 'Amber' },
+    { value: '#8b5cf6', name: 'Purple' },
+    { value: '#10b981', name: 'Green' },
+    { value: '#f43f5e', name: 'Rose/Red' },
+    { value: '#ec4899', name: 'Pink' },
+    { value: '#64748b', name: 'Slate' },
+  ];
 
   // Business form state
   const [name, setName] = useState(business.name);
@@ -78,6 +98,50 @@ export const SettingsView: React.FC = () => {
       setStamp(base64);
     };
     reader.readAsDataURL(file);
+  };
+
+  // Load categories
+  const categoriesList = React.useMemo(() => {
+    return db.getCategories(business.id);
+  }, [business.id, dataVersion]);
+
+  // Save/Create a new Category
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+
+    // Check if category name already exists
+    const exists = categoriesList.some(c => c.name.toLowerCase() === newCatName.trim().toLowerCase());
+    if (exists) {
+      alert(lang === 'ar' ? 'هذه الفئة موجودة بالفعل!' : 'Cette catégorie existe déjà !');
+      return;
+    }
+
+    const newCategory: Category = {
+      id: 'cat-' + Math.random().toString(36).substring(2, 9),
+      business_id: business.id,
+      name: newCatName.trim(),
+      icon: newCatIcon,
+      color: newCatColor,
+      created_at: new Date().toISOString(),
+    };
+
+    db.saveCategory(newCategory);
+    setNewCatName('');
+    refreshData();
+    alert(lang === 'ar' ? 'تمت إضافة الفئة بنجاح!' : 'Catégorie ajoutée avec succès !');
+  };
+
+  // Delete Category
+  const handleDeleteCategory = (catId: string, catName: string) => {
+    const confirmMessage = lang === 'ar' 
+      ? `هل أنت متأكد من حذف فئة "${catName}"؟ السلع المرتبطة بها ستبقى في المحل ولكن بدون فئة.` 
+      : `Voulez-vous vraiment supprimer la catégorie "${catName}" ? Les articles associés resteront mais sans catégorie.`;
+    
+    if (window.confirm(confirmMessage)) {
+      db.deleteCategory(catId);
+      refreshData();
+    }
   };
 
   // Save Store Settings
@@ -160,6 +224,15 @@ export const SettingsView: React.FC = () => {
             >
               <Store className="w-4 h-4" />
               <span>{lang === 'ar' ? 'بيانات المحل' : 'Infos Magasin'}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('categories')}
+              className={`px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 ${
+                activeTab === 'categories' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
+              }`}
+            >
+              <Palette className="w-4 h-4" />
+              <span>{lang === 'ar' ? 'إدارة الفئات' : 'Catégories'}</span>
             </button>
             <button
               onClick={() => setActiveTab('general')}
@@ -725,6 +798,127 @@ export const SettingsView: React.FC = () => {
                   : (theme === 'dark' ? 'Passer au mode Clair' : 'Passer au mode Sombre')}
               </span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Categories Settings */}
+      {activeTab === 'categories' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
+          {/* Column 1: Add Category Form */}
+          <form onSubmit={handleAddCategory} className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5 h-fit">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white pb-1.5">
+                {lang === 'ar' ? 'إضافة فئة جديدة للمحل' : 'Créer une nouvelle catégorie'}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {lang === 'ar' 
+                  ? 'قم بإضافة تصنيفات مخصصة لترتيب بضائعك وتسهيل الوصول إليها في شاشة المبيعات وباقي أقسام التطبيق' 
+                  : 'Ajoutez des catégories personnalisées pour organiser vos articles et y accéder rapidement.'}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {lang === 'ar' ? 'اسم الفئة / التصنيف *' : 'Nom de la catégorie *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  placeholder={lang === 'ar' ? 'مثال: مواد تنظيف، عطور، مشروبات...' : 'Ex: Détergents, Parfums, Boissons...'}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-teal-500 outline-hidden font-medium text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                  {lang === 'ar' ? 'اللون المميز للمبيعات' : 'Couleur distinctive'}
+                </label>
+                <div className="flex flex-wrap gap-2.5">
+                  {categoryColors.map(color => (
+                    <button
+                      key={color.value}
+                      type="button"
+                      onClick={() => setNewCatColor(color.value)}
+                      className={`w-8 h-8 rounded-full border-2 transition active:scale-95 cursor-pointer relative ${
+                        newCatColor === color.value 
+                          ? 'border-teal-600 dark:border-teal-400 scale-110 shadow-xs' 
+                          : 'border-transparent hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: color.value }}
+                      title={color.name}
+                    >
+                      {newCatColor === color.value && (
+                        <div className="absolute inset-0 flex items-center justify-center text-white">
+                          <Check className="w-4 h-4 drop-shadow-md" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition active:scale-95 shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>{lang === 'ar' ? 'إضافة الفئة الجديدة' : 'Ajouter la catégorie'}</span>
+            </button>
+          </form>
+
+          {/* Column 2: Categories List */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col h-full min-h-[350px]">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white pb-1.5">
+                {lang === 'ar' ? 'قائمة الفئات المتوفرة' : 'Catégories disponibles'}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {lang === 'ar' 
+                  ? `إجمالي الفئات المسجلة: ${categoriesList.length} فئة` 
+                  : `Total : ${categoriesList.length} catégories`}
+              </p>
+            </div>
+
+            <div className="mt-4 flex-1 overflow-y-auto divide-y divide-slate-150 dark:divide-slate-800 pr-1 max-h-[400px]">
+              {categoriesList.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 text-xs">
+                  {lang === 'ar' ? 'لا توجد فئات مخصصة حالياً.' : 'Aucune catégorie personnalisée.'}
+                </div>
+              ) : (
+                categoriesList.map(cat => (
+                  <div key={cat.id} className="py-3 flex items-center justify-between gap-3 group">
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-4 h-4 rounded-full shadow-xs shrink-0" 
+                        style={{ backgroundColor: cat.color || '#0284c7' }} 
+                      />
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                        {cat.name}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition opacity-80 hover:opacity-100 cursor-pointer"
+                      title={lang === 'ar' ? 'حذف الفئة' : 'Supprimer'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <p className="mt-4 text-[9.5px] text-slate-400 leading-normal border-t border-slate-100 dark:border-slate-800 pt-3">
+              {lang === 'ar' 
+                ? '💡 تذكير: يمكنك استعمال هذه الفئات مباشرة أثناء إضافة أو تعديل أي سلعة في المحل لتبسيط تنظيم متجرك.'
+                : '💡 Astuce : Vous pouvez utiliser ces catégories lors de l\'ajout ou de l\'modification de vos produits.'}
+            </p>
           </div>
         </div>
       )}
