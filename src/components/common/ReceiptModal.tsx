@@ -585,47 +585,49 @@ export const ReceiptModal: React.FC = () => {
                     </div>
                   </div>
 
-                   {/* Cachet & Signature with authentic blue company stamp */}
-                  <div className="mt-8 flex justify-start">
-                    <div className={lang === 'ar' ? 'text-right' : 'text-left'}>
-                      <p className="text-xs font-semibold text-slate-700 underline">{lang === 'ar' ? 'الختم والتوقيع (Cachet & Signature)' : 'Cachet & Signature'}</p>
-                      <div className="relative inline-block w-48 h-28 mt-2">
-                        {business.stamp ? (
-                          <img
-                            src={business.stamp}
-                            alt="Company Stamp"
-                            className={`w-full h-full object-contain ${lang === 'ar' ? 'object-right' : 'object-left'}`}
-                          />
-                        ) : (
-                          <svg viewBox="0 0 200 120" className="w-full h-full text-blue-700/85">
-                            <ellipse cx="100" cy="60" rx="80" ry="44" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="6 2" opacity="0.8" />
-                            <ellipse cx="100" cy="60" rx="74" ry="38" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.8" />
-                            <text x="100" y="44" textAnchor="middle" fontSize="9" fontWeight="bold" fill="currentColor">
-                              {business.name.toUpperCase()}
-                            </text>
-                            <text x="100" y="58" textAnchor="middle" fontSize="7.5" fill="currentColor">
-                              {business.activity || (lang === 'ar' ? 'تجارة عامة' : 'Commerce Général')}
-                            </text>
-                            <text x="100" y="70" textAnchor="middle" fontSize="7" fill="currentColor">
-                              {lang === 'ar' ? 'هاتف : ' : 'Tél : '}{business.phone}
-                            </text>
-                            <text x="100" y="81" textAnchor="middle" fontSize="6.5" fill="currentColor">
-                              ICE: {business.ice || '002938475000031'}
-                            </text>
-                            <path
-                              d="M 40 85 C 60 40, 80 90, 110 50 C 130 30, 150 70, 175 45 C 190 35, 170 85, 140 75 C 100 65, 80 85, 55 95"
-                              fill="none"
-                              stroke="#1d4ed8"
-                              strokeWidth="2.2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              opacity="0.9"
-                            />
-                          </svg>
-                        )}
+                    {/* Cachet & Signature with authentic blue company stamp */}
+                    {(business.stampEnabled !== false && business.stamp !== 'DISABLED') && (
+                      <div className="mt-8 flex justify-start">
+                        <div className={lang === 'ar' ? 'text-right' : 'text-left'}>
+                          <p className="text-xs font-semibold text-slate-700 underline">{lang === 'ar' ? 'الختم والتوقيع (Cachet & Signature)' : 'Cachet & Signature'}</p>
+                          <div className="relative inline-block w-48 h-28 mt-2">
+                            {business.stamp && business.stamp !== 'DISABLED' ? (
+                              <img
+                                src={business.stamp}
+                                alt="Company Stamp"
+                                className={`w-full h-full object-contain ${lang === 'ar' ? 'object-right' : 'object-left'}`}
+                              />
+                            ) : (
+                              <svg viewBox="0 0 200 120" className="w-full h-full text-blue-700/85">
+                                <ellipse cx="100" cy="60" rx="80" ry="44" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="6 2" opacity="0.8" />
+                                <ellipse cx="100" cy="60" rx="74" ry="38" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.8" />
+                                <text x="100" y="44" textAnchor="middle" fontSize="9" fontWeight="bold" fill="currentColor">
+                                  {business.name.toUpperCase()}
+                                </text>
+                                <text x="100" y="58" textAnchor="middle" fontSize="7.5" fill="currentColor">
+                                  {business.activity || (lang === 'ar' ? 'تجارة عامة' : 'Commerce Général')}
+                                </text>
+                                <text x="100" y="70" textAnchor="middle" fontSize="7" fill="currentColor">
+                                  {lang === 'ar' ? 'هاتف : ' : 'Tél : '}{business.phone}
+                                </text>
+                                <text x="100" y="81" textAnchor="middle" fontSize="6.5" fill="currentColor">
+                                  ICE: {business.ice || '002938475000031'}
+                                </text>
+                                <path
+                                  d="M 40 85 C 60 40, 80 90, 110 50 C 130 30, 150 70, 175 45 C 190 35, 170 85, 140 75 C 100 65, 80 85, 55 95"
+                                  fill="none"
+                                  stroke="#1d4ed8"
+                                  strokeWidth="2.2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  opacity="0.9"
+                                />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    )}
                 </div>
 
                 {/* Legal Footer Bottom Line */}
@@ -664,7 +666,6 @@ export const ReceiptModal: React.FC = () => {
               {/* Header / Store details */}
               <div className="text-center pb-2 border-b border-dashed border-slate-300">
                 <h2 className="font-extrabold text-base tracking-tight">{business.name}</h2>
-                <div className="text-[11px] text-slate-600">{business.activity}</div>
                 <div className="text-[11px] mt-0.5">{business.address} - {business.city}</div>
                 <div className="text-[11px] font-bold mt-0.5">{lang === 'ar' ? 'الهاتف:' : 'Tél:'} {business.phone}</div>
                 

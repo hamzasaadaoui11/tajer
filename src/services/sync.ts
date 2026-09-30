@@ -118,6 +118,28 @@ class SyncEngine {
         }
       }
 
+      const deletedSales = db.getDeleteQueue('sales');
+      if (deletedSales.length > 0) {
+        const { error } = await supabase.from('sales').delete().in('id', deletedSales);
+        if (!error) {
+          db.clearDeleteQueue('sales', deletedSales);
+          processed += deletedSales.length;
+        } else {
+          console.warn('Error syncing deleted sales:', error.message);
+        }
+      }
+
+      const deletedExpenses = db.getDeleteQueue('expenses');
+      if (deletedExpenses.length > 0) {
+        const { error } = await supabase.from('expenses').delete().in('id', deletedExpenses);
+        if (!error) {
+          db.clearDeleteQueue('expenses', deletedExpenses);
+          processed += deletedExpenses.length;
+        } else {
+          console.warn('Error syncing deleted expenses:', error.message);
+        }
+      }
+
       // ==========================================
       // PHASE 2: PUSH CURRENT LOCAL DATA TO SERVER
       // ==========================================
@@ -138,7 +160,9 @@ class SyncEngine {
           patente: init.business.patente || null,
           cnss: init.business.cnss || null,
           logo: init.business.logo || null,
-          stamp: init.business.stamp || null,
+          stamp: (init.business.stampEnabled === false || init.business.stamp === 'DISABLED')
+            ? 'DISABLED' 
+            : (init.business.stamp || null),
           invoice_color: init.business.invoiceColor || '#C02626',
           receipt_footer: init.business.receiptFooter || null,
           a4_footer: init.business.a4Footer || null,
@@ -328,8 +352,10 @@ class SyncEngine {
 
       // C7. Push Sales & Invoices
       const localSales = db.getSales(bizId);
-      if (localSales.length > 0) {
-        const salesPayload = localSales.map(s => ({
+      const syncedSaleIds = new Set(db.getSyncedIds('sales'));
+      const unsyncedSales = localSales.filter(s => !syncedSaleIds.has(s.id));
+      if (unsyncedSales.length > 0) {
+        const salesPayload = unsyncedSales.map(s => ({
           id: s.id,
           business_id: s.business_id,
           branch_id: s.branch_id,
@@ -353,14 +379,17 @@ class SyncEngine {
         if (salesErr) {
           errors.push(`المبيعات (Sales): ${salesErr.message}`);
         } else {
-          processed += localSales.length;
+          processed += unsyncedSales.length;
+          db.setSyncedIds('sales', Array.from(new Set([...Array.from(syncedSaleIds), ...unsyncedSales.map(s => s.id)])));
         }
       }
 
       // C8. Push Sale Returns
       const localSaleReturns = db.getSaleReturns(bizId);
-      if (localSaleReturns.length > 0) {
-        const saleReturnPayload = localSaleReturns.map(sr => ({
+      const syncedSRIds = new Set(db.getSyncedIds('sale_returns'));
+      const unsyncedSR = localSaleReturns.filter(sr => !syncedSRIds.has(sr.id));
+      if (unsyncedSR.length > 0) {
+        const saleReturnPayload = unsyncedSR.map(sr => ({
           id: sr.id,
           business_id: sr.business_id,
           branch_id: sr.branch_id,
@@ -377,13 +406,18 @@ class SyncEngine {
         const { error: srErr } = await supabase.from('sale_returns').upsert(saleReturnPayload);
         if (srErr) {
           errors.push(`مرتجعات المبيعات (Sale Returns): ${srErr.message}`);
+        } else {
+          processed += unsyncedSR.length;
+          db.setSyncedIds('sale_returns', Array.from(new Set([...Array.from(syncedSRIds), ...unsyncedSR.map(sr => sr.id)])));
         }
       }
 
       // C9. Push Purchases
       const localPurchases = db.getPurchases(bizId);
-      if (localPurchases.length > 0) {
-        const purchasesPayload = localPurchases.map(p => ({
+      const syncedPurchIds = new Set(db.getSyncedIds('purchases'));
+      const unsyncedPurch = localPurchases.filter(p => !syncedPurchIds.has(p.id));
+      if (unsyncedPurch.length > 0) {
+        const purchasesPayload = unsyncedPurch.map(p => ({
           id: p.id,
           business_id: p.business_id,
           branch_id: p.branch_id,
@@ -406,14 +440,17 @@ class SyncEngine {
         if (purchErr) {
           errors.push(`المشتريات (Purchases): ${purchErr.message}`);
         } else {
-          processed += localPurchases.length;
+          processed += unsyncedPurch.length;
+          db.setSyncedIds('purchases', Array.from(new Set([...Array.from(syncedPurchIds), ...unsyncedPurch.map(p => p.id)])));
         }
       }
 
       // C10. Push Purchase Returns
       const localPurchaseReturns = db.getPurchaseReturns(bizId);
-      if (localPurchaseReturns.length > 0) {
-        const purchReturnPayload = localPurchaseReturns.map(pr => ({
+      const syncedPRIds = new Set(db.getSyncedIds('purchase_returns'));
+      const unsyncedPR = localPurchaseReturns.filter(pr => !syncedPRIds.has(pr.id));
+      if (unsyncedPR.length > 0) {
+        const purchReturnPayload = unsyncedPR.map(pr => ({
           id: pr.id,
           business_id: pr.business_id,
           branch_id: pr.branch_id,
@@ -429,13 +466,18 @@ class SyncEngine {
         const { error: prErr } = await supabase.from('purchase_returns').upsert(purchReturnPayload);
         if (prErr) {
           errors.push(`مرتجعات المشتريات (Purchase Returns): ${prErr.message}`);
+        } else {
+          processed += unsyncedPR.length;
+          db.setSyncedIds('purchase_returns', Array.from(new Set([...Array.from(syncedPRIds), ...unsyncedPR.map(pr => pr.id)])));
         }
       }
 
       // C11. Push Expenses
       const localExpenses = db.getExpenses(bizId);
-      if (localExpenses.length > 0) {
-        const expPayload = localExpenses.map(e => ({
+      const syncedExpIds = new Set(db.getSyncedIds('expenses'));
+      const unsyncedExp = localExpenses.filter(e => !syncedExpIds.has(e.id));
+      if (unsyncedExp.length > 0) {
+        const expPayload = unsyncedExp.map(e => ({
           id: e.id,
           business_id: e.business_id,
           branch_id: e.branch_id,
@@ -451,14 +493,17 @@ class SyncEngine {
         if (expErr) {
           errors.push(`المصاريف (Expenses): ${expErr.message}`);
         } else {
-          processed += localExpenses.length;
+          processed += unsyncedExp.length;
+          db.setSyncedIds('expenses', Array.from(new Set([...Array.from(syncedExpIds), ...unsyncedExp.map(e => e.id)])));
         }
       }
 
       // C12. Push Cash Transactions
       const localCash = db.getCashTransactions(bizId);
-      if (localCash.length > 0) {
-        const cashPayload = localCash.map(c => ({
+      const syncedCashIds = new Set(db.getSyncedIds('cash_transactions'));
+      const unsyncedCash = localCash.filter(c => !syncedCashIds.has(c.id));
+      if (unsyncedCash.length > 0) {
+        const cashPayload = unsyncedCash.map(c => ({
           id: c.id,
           business_id: c.business_id,
           branch_id: c.branch_id,
@@ -475,14 +520,17 @@ class SyncEngine {
         if (cashErr) {
           errors.push(`الصندوق (Cash): ${cashErr.message}`);
         } else {
-          processed += localCash.length;
+          processed += unsyncedCash.length;
+          db.setSyncedIds('cash_transactions', Array.from(new Set([...Array.from(syncedCashIds), ...unsyncedCash.map(c => c.id)])));
         }
       }
 
       // C13. Push Payment Transactions
       const localPayments = db.getPaymentTransactions(bizId);
-      if (localPayments.length > 0) {
-        const payPayload = localPayments.map(p => ({
+      const syncedPayIds = new Set(db.getSyncedIds('payment_transactions'));
+      const unsyncedPay = localPayments.filter(p => !syncedPayIds.has(p.id));
+      if (unsyncedPay.length > 0) {
+        const payPayload = unsyncedPay.map(p => ({
           id: p.id,
           business_id: p.business_id,
           branch_id: p.branch_id,
@@ -500,14 +548,17 @@ class SyncEngine {
         if (payErr) {
           errors.push(`تسديدات الديون (Payments): ${payErr.message}`);
         } else {
-          processed += localPayments.length;
+          processed += unsyncedPay.length;
+          db.setSyncedIds('payment_transactions', Array.from(new Set([...Array.from(syncedPayIds), ...unsyncedPay.map(p => p.id)])));
         }
       }
 
       // C14. Push Stock Movements
       const localStockMovements = db.getStockMovements(bizId);
-      if (localStockMovements.length > 0) {
-        const smPayload = localStockMovements.slice(0, 500).map(sm => ({
+      const syncedSMIds = new Set(db.getSyncedIds('stock_movements'));
+      const unsyncedSM = localStockMovements.filter(sm => !syncedSMIds.has(sm.id));
+      if (unsyncedSM.length > 0) {
+        const smPayload = unsyncedSM.slice(0, 100).map(sm => ({
           id: sm.id,
           business_id: sm.business_id,
           branch_id: sm.branch_id,
@@ -525,6 +576,9 @@ class SyncEngine {
         const { error: smErr } = await supabase.from('stock_movements').upsert(smPayload);
         if (smErr) {
           errors.push(`حركات المخزون (Stock Movements): ${smErr.message}`);
+        } else {
+          processed += unsyncedSM.length;
+          db.setSyncedIds('stock_movements', Array.from(new Set([...Array.from(syncedSMIds), ...unsyncedSM.map(sm => sm.id)])));
         }
       }
 
@@ -726,15 +780,19 @@ class SyncEngine {
 
       // 2.3 Pull Customers & Delete any removed on other devices
       try {
-        await supabase
-          .from('customers')
-          .delete()
-          .eq('business_id', bizId)
-          .in('name', ['السيد أحمد الإدريسي', 'السيدة فاطمة الزهراء العلوي', 'مقهى الأندلس (السيد رشيد)']);
-        await supabase
-          .from('customers')
-          .delete()
-          .in('id', ['cust-1', 'cust-2', 'cust-3']);
+        const demoCleanedKey = `tajer_demo_contacts_cleaned_${bizId}`;
+        if (!localStorage.getItem(demoCleanedKey)) {
+          await supabase
+            .from('customers')
+            .delete()
+            .eq('business_id', bizId)
+            .in('name', ['السيد أحمد الإدريسي', 'السيدة فاطمة الزهراء العلوي', 'مقهى الأندلس (السيد رشيد)']);
+          await supabase
+            .from('customers')
+            .delete()
+            .in('id', ['cust-1', 'cust-2', 'cust-3']);
+          localStorage.setItem(demoCleanedKey, 'true');
+        }
 
         const { data: remoteCustomers, error: custPullErr } = await supabase
           .from('customers')
@@ -812,15 +870,19 @@ class SyncEngine {
 
       // 2.4 Pull Suppliers & Delete any removed on other devices
       try {
-        await supabase
-          .from('suppliers')
-          .delete()
-          .eq('business_id', bizId)
-          .in('name', ['شركة توزيع الألبان المركزية', 'شركة التوزيع السريع المغرب', 'مجموعة المشروبات والمياه المعدنية']);
-        await supabase
-          .from('suppliers')
-          .delete()
-          .in('id', ['sup-1', 'sup-2']);
+        const suppCleanedKey = `tajer_demo_suppliers_cleaned_${bizId}`;
+        if (!localStorage.getItem(suppCleanedKey)) {
+          await supabase
+            .from('suppliers')
+            .delete()
+            .eq('business_id', bizId)
+            .in('name', ['شركة توزيع الألبان المركزية', 'شركة التوزيع السريع المغرب', 'مجموعة المشروبات والمياه المعدنية']);
+          await supabase
+            .from('suppliers')
+            .delete()
+            .in('id', ['sup-1', 'sup-2']);
+          localStorage.setItem(suppCleanedKey, 'true');
+        }
 
         const { data: remoteSuppliers, error: suppPullErr } = await supabase
           .from('suppliers')
@@ -902,25 +964,35 @@ class SyncEngine {
       }
 
       // ==========================================
-      // PHASE D: PULL APPEND-ONLY HISTORICAL DATA
+      // PHASE D: PULL APPEND-ONLY HISTORICAL DATA (INCREMENTAL)
       // ==========================================
+      const lastSyncIso = localStorage.getItem(`tajer_last_sync_${bizId}`);
 
       // D1. Pull Remote Sales
       try {
-        const { data: remoteSales } = await supabase
+        const localSales = db.getSales(bizId);
+        let salesQuery = supabase
           .from('sales')
           .select('*')
           .eq('business_id', bizId)
-          .order('created_at', { ascending: false })
-          .limit(300);
+          .order('created_at', { ascending: false });
+
+        if (localSales.length > 0 && lastSyncIso) {
+          salesQuery = salesQuery.gt('created_at', lastSyncIso).limit(50);
+        } else {
+          salesQuery = salesQuery.limit(100);
+        }
+
+        const { data: remoteSales } = await salesQuery;
 
         if (remoteSales && remoteSales.length > 0) {
-          const localSales = db.getSales(bizId);
           const localIds = new Set(localSales.map(s => s.id));
+          const salesTombstones = new Set(db.getTombstones('sales'));
+          const salesPendingDeletes = new Set(db.getDeleteQueue('sales'));
           const toAdd: any[] = [];
 
           for (const rs of remoteSales) {
-            if (!localIds.has(rs.id)) {
+            if (!localIds.has(rs.id) && !salesTombstones.has(rs.id) && !salesPendingDeletes.has(rs.id)) {
               toAdd.push({
                 id: rs.id,
                 business_id: rs.business_id,
@@ -953,20 +1025,29 @@ class SyncEngine {
 
       // D2. Pull Remote Expenses
       try {
-        const { data: remoteExpenses } = await supabase
+        const localExp = db.getExpenses(bizId);
+        let expQuery = supabase
           .from('expenses')
           .select('*')
           .eq('business_id', bizId)
-          .order('created_at', { ascending: false })
-          .limit(200);
+          .order('created_at', { ascending: false });
+
+        if (localExp.length > 0 && lastSyncIso) {
+          expQuery = expQuery.gt('created_at', lastSyncIso).limit(50);
+        } else {
+          expQuery = expQuery.limit(100);
+        }
+
+        const { data: remoteExpenses } = await expQuery;
 
         if (remoteExpenses && remoteExpenses.length > 0) {
-          const localExp = db.getExpenses(bizId);
           const localExpIds = new Set(localExp.map(e => e.id));
+          const expTombstones = new Set(db.getTombstones('expenses'));
+          const expPendingDeletes = new Set(db.getDeleteQueue('expenses'));
           const toAddExp: any[] = [];
 
           for (const re of remoteExpenses) {
-            if (!localExpIds.has(re.id)) {
+            if (!localExpIds.has(re.id) && !expTombstones.has(re.id) && !expPendingDeletes.has(re.id)) {
               toAddExp.push({
                 id: re.id,
                 business_id: re.business_id,
@@ -991,15 +1072,22 @@ class SyncEngine {
 
       // D3. Pull Remote Cash Transactions
       try {
-        const { data: remoteCash } = await supabase
+        const localCash = db.getCashTransactions(bizId);
+        let cashQuery = supabase
           .from('cash_transactions')
           .select('*')
           .eq('business_id', bizId)
-          .order('created_at', { ascending: false })
-          .limit(200);
+          .order('created_at', { ascending: false });
+
+        if (localCash.length > 0 && lastSyncIso) {
+          cashQuery = cashQuery.gt('created_at', lastSyncIso).limit(50);
+        } else {
+          cashQuery = cashQuery.limit(100);
+        }
+
+        const { data: remoteCash } = await cashQuery;
 
         if (remoteCash && remoteCash.length > 0) {
-          const localCash = db.getCashTransactions(bizId);
           const localCashIds = new Set(localCash.map(c => c.id));
           const toAddCash: any[] = [];
 
@@ -1031,15 +1119,22 @@ class SyncEngine {
 
       // D4. Pull Remote Payment Transactions
       try {
-        const { data: remotePayments } = await supabase
+        const localPay = db.getPaymentTransactions(bizId);
+        let payQuery = supabase
           .from('payment_transactions')
           .select('*')
           .eq('business_id', bizId)
-          .order('created_at', { ascending: false })
-          .limit(200);
+          .order('created_at', { ascending: false });
+
+        if (localPay.length > 0 && lastSyncIso) {
+          payQuery = payQuery.gt('created_at', lastSyncIso).limit(50);
+        } else {
+          payQuery = payQuery.limit(100);
+        }
+
+        const { data: remotePayments } = await payQuery;
 
         if (remotePayments && remotePayments.length > 0) {
-          const localPay = db.getPaymentTransactions(bizId);
           const localPayIds = new Set(localPay.map(p => p.id));
           const toAddPay: any[] = [];
 
@@ -1068,6 +1163,9 @@ class SyncEngine {
       } catch (e) {
         console.warn('Pull payments notice:', e);
       }
+
+      // Record successful sync time to enable delta pulling next time
+      localStorage.setItem(`tajer_last_sync_${bizId}`, new Date().toISOString());
 
       // Reconcile all customer and supplier debts based on synced transactions
       db.reconcileCustomerDebts(bizId);
@@ -1314,6 +1412,67 @@ class SyncEngine {
         console.warn('Cloud delete supplier notice:', e);
       }
     }
+    return { success: true };
+  }
+
+  public async deleteSaleEverywhere(
+    saleId: string, 
+    businessId: string, 
+    branchId?: string, 
+    userName: string = 'النظام'
+  ): Promise<{ success: boolean; restoredItemsCount: number }> {
+    const res = db.deleteSale(saleId, businessId, branchId, userName);
+    if (!res.success) return { success: false, restoredItemsCount: 0 };
+
+    const supabase = getSupabase();
+    if (supabase && isSupabaseConfigured() && navigator.onLine) {
+      try {
+        const { error } = await supabase.from('sales').delete().eq('id', saleId);
+        if (!error) {
+          db.clearDeleteQueue('sales', [saleId]);
+        }
+        if (businessId) {
+          try {
+            await supabase.from('deleted_records').insert({
+              id: `del-sales-${saleId}-${Date.now()}`,
+              table_name: 'sales',
+              record_id: saleId,
+              business_id: businessId,
+              deleted_at: new Date().toISOString(),
+            });
+          } catch {
+            // Ignore if deleted_records table doesn't exist
+          }
+        }
+        // Sync updated products in background to push restored stock to cloud
+        this.syncAll().catch(e => console.warn('Sync after delete sale error:', e));
+      } catch (e) {
+        console.warn('Cloud delete sale notice:', e);
+      }
+    }
+
+    return { success: true, restoredItemsCount: res.restoredItemsCount };
+  }
+
+  public async deleteExpenseEverywhere(
+    expenseId: string, 
+    businessId: string, 
+    userName: string = 'Admin'
+  ): Promise<{ success: boolean }> {
+    db.deleteExpense(expenseId, businessId, userName);
+
+    const supabase = getSupabase();
+    if (supabase && isSupabaseConfigured() && navigator.onLine) {
+      try {
+        const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
+        if (!error) {
+          db.clearDeleteQueue('expenses', [expenseId]);
+        }
+      } catch (e) {
+        console.warn('Cloud delete expense notice:', e);
+      }
+    }
+
     return { success: true };
   }
 }

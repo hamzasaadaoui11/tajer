@@ -478,24 +478,34 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                         {lang === 'ar' ? 'توقيع وختم الاستلام :' : 'Signature & cachet de réception :'}
                       </p>
                       {/* Stamp SVG */}
-                      <div className={`absolute ${lang === 'ar' ? 'left-4' : 'right-4'} bottom-2 w-32 h-20 opacity-80 pointer-events-none`}>
-                        <svg viewBox="0 0 200 120" className="w-full h-full text-blue-700">
-                          <ellipse cx="100" cy="60" rx="80" ry="44" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="6 2" opacity="0.8" />
-                          <ellipse cx="100" cy="60" rx="74" ry="38" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.8" />
-                          <text x="100" y="44" textAnchor="middle" fontSize="9" fontWeight="bold" fill="currentColor">
-                            {business.name.slice(0, 20).toUpperCase()}
-                          </text>
-                          <text x="100" y="58" textAnchor="middle" fontSize="7.5" fill="currentColor">
-                            {lang === 'ar' ? 'استلام مطابق' : 'Réception Conforme'}
-                          </text>
-                          <text x="100" y="72" textAnchor="middle" fontSize="7" fill="currentColor">
-                            {lang === 'ar' ? 'الهاتف:' : 'Tél:'} {business.phone}
-                          </text>
-                          <text x="100" y="83" textAnchor="middle" fontSize="6.5" fill="currentColor">
-                            ICE: {business.ice || '002938475000031'}
-                          </text>
-                        </svg>
-                      </div>
+                      {(business.stampEnabled !== false && business.stamp !== 'DISABLED') && (
+                        <div className={`absolute ${lang === 'ar' ? 'left-4' : 'right-4'} bottom-2 w-32 h-20 opacity-80 pointer-events-none`}>
+                          {business.stamp ? (
+                            <img
+                              src={business.stamp}
+                              alt="Company Stamp"
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <svg viewBox="0 0 200 120" className="w-full h-full text-blue-700">
+                              <ellipse cx="100" cy="60" rx="80" ry="44" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="6 2" opacity="0.8" />
+                              <ellipse cx="100" cy="60" rx="74" ry="38" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.8" />
+                              <text x="100" y="44" textAnchor="middle" fontSize="9" fontWeight="bold" fill="currentColor">
+                                {business.name.slice(0, 20).toUpperCase()}
+                              </text>
+                              <text x="100" y="58" textAnchor="middle" fontSize="7.5" fill="currentColor">
+                                {lang === 'ar' ? 'استلام مطابق' : 'Réception Conforme'}
+                              </text>
+                              <text x="100" y="72" textAnchor="middle" fontSize="7" fill="currentColor">
+                                {lang === 'ar' ? 'الهاتف:' : 'Tél:'} {business.phone}
+                              </text>
+                              <text x="100" y="83" textAnchor="middle" fontSize="6.5" fill="currentColor">
+                                ICE: {business.ice || '002938475000031'}
+                              </text>
+                            </svg>
+                          )}
+                        </div>
+                      )}
                       <p className="text-[10px] text-slate-400">{lang === 'ar' ? 'تم فحص البضاعة واستلامها بالمحل' : 'Marchandise vérifiée et reçue'}</p>
                     </div>
                   </div>

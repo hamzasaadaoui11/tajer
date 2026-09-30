@@ -22,7 +22,11 @@ export const OnboardingView: React.FC = () => {
 
   const [step, setStep] = useState<number>(1);
   const [storeName, setStoreName] = useState(business.name || 'متجر البركة');
-  const [activity, setActivity] = useState(business.activity || 'grocery');
+  const [activity, setActivity] = useState(
+    business.activity && business.activity !== 'grocery' && business.activity !== 'general_store' 
+      ? business.activity 
+      : ''
+  );
   const [phone, setPhone] = useState(business.phone || '06 61 23 45 67');
   const [city, setCity] = useState(business.city || 'الدار البيضاء');
   const [address, setAddress] = useState(business.address || 'حي المعاريف');

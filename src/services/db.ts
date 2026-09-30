@@ -363,6 +363,12 @@ class LocalDatabase {
       this.set('users', users);
     }
 
+    // Migration for existing business: Clear default legacy 'grocery' or 'general_store' enum activity
+    if (businesses.length > 0 && (businesses[0].activity === 'grocery' || businesses[0].activity === 'general_store')) {
+      businesses[0].activity = '';
+      this.set('businesses', businesses);
+    }
+
     return {
       business: businesses[0],
       branch: branches[0],
@@ -1066,6 +1072,127 @@ class LocalDatabase {
     return sale;
   }
 
+  // Delete Sale with full reversal: Restores stock, reduces revenue, updates cash and customer debts
+  public deleteSale(
+    saleId: string, 
+    businessId: string, 
+    branchId?: string, 
+    userName: string = 'النظام'
+  ): { success: boolean; sale?: Sale; restoredItemsCount: number } {
+    const sales = this.get<Sale>('sales');
+    const saleIndex = sales.findIndex(s => s.id === saleId);
+    if (saleIndex === -1) {
+      return { success: false, restoredItemsCount: 0 };
+    }
+
+    const sale = sales[saleIndex];
+    const effectiveBranchId = branchId || sale.branch_id;
+
+    // 1. Restore product stock for each item in the sale
+    const products = this.get<Product>('products');
+    let totalRestoredQty = 0;
+
+    for (const item of sale.items) {
+      const pIdx = products.findIndex(p => p.id === item.product_id);
+      if (pIdx !== -1) {
+        const prod = products[pIdx];
+        const oldQty = prod.current_stock;
+        const newQty = oldQty + item.quantity;
+        prod.current_stock = newQty;
+        prod.updated_at = new Date().toISOString();
+        totalRestoredQty += item.quantity;
+
+        // Record stock movement (adjustment indicating sale deletion and restock)
+        this.addStockMovement({
+          id: 'mov-' + Math.random().toString(36).substring(2, 9),
+          business_id: sale.business_id || businessId,
+          branch_id: effectiveBranchId,
+          product_id: prod.id,
+          product_name: prod.name,
+          type: 'ADJUSTMENT',
+          quantity_before: oldQty,
+          quantity_change: item.quantity,
+          quantity_after: newQty,
+          reference_id: `DEL-${sale.invoice_number}`,
+          notes: `إرجاع للمخزون إثر حذف الفاتورة ${sale.invoice_number}`,
+          user_name: userName,
+          created_at: new Date().toISOString(),
+        });
+
+        this.removeSyncedId('products', prod.id);
+      }
+    }
+    this.set('products', products);
+
+    // 2. Adjust Cash Drawer if paid in cash
+    if (sale.amount_paid > 0 && (sale.payment_method === 'CASH' || sale.payment_method === 'SPLIT')) {
+      let cashList = this.get<CashTransaction>('cash_transactions');
+      const initialCount = cashList.length;
+      // Filter out the initial cash receipt for this sale
+      cashList = cashList.filter(c => c.reference !== sale.invoice_number);
+
+      // If it wasn't filtered by exact reference, add a compensatory OUT transaction
+      if (cashList.length === initialCount) {
+        const currentCash = this.getCurrentCashBalance(sale.business_id || businessId, effectiveBranchId);
+        const refundCashTx: CashTransaction = {
+          id: 'cash-' + Date.now(),
+          business_id: sale.business_id || businessId,
+          branch_id: effectiveBranchId,
+          type: 'OUT',
+          category: 'REFUND',
+          amount: sale.amount_paid,
+          balance_after: Math.max(0, currentCash - sale.amount_paid),
+          reference: `DEL-${sale.invoice_number}`,
+          description: `إلغاء مقبوضات الفاتورة المحذوفة ${sale.invoice_number}`,
+          user_name: userName,
+          created_at: new Date().toISOString(),
+        };
+        cashList.unshift(refundCashTx);
+      }
+      this.set('cash_transactions', cashList);
+    }
+
+    // 3. Adjust Customer spending and debt
+    if (sale.customer_id) {
+      const customers = this.get<Customer>('customers');
+      const cIdx = customers.findIndex(c => c.id === sale.customer_id);
+      if (cIdx !== -1) {
+        customers[cIdx].total_spent = Math.max(0, (customers[cIdx].total_spent || 0) - sale.total);
+        customers[cIdx].updated_at = new Date().toISOString();
+        this.set('customers', customers);
+        this.addPendingCreate('customers', sale.customer_id);
+      }
+    }
+
+    // 4. Remove any returns attached to this sale
+    let returns = this.get<SaleReturn>('sale_returns');
+    returns = returns.filter(r => r.sale_id !== sale.id);
+    this.set('sale_returns', returns);
+
+    // 5. Remove the sale from local sales array
+    sales.splice(saleIndex, 1);
+    this.set('sales', sales);
+
+    // 6. Queue for cloud delete and tombstone
+    this.addToDeleteQueue('sales', sale.id);
+    this.addToTombstones('sales', sale.id);
+    this.removeSyncedId('sales', sale.id);
+    this.removePendingCreate('sales', sale.id);
+
+    // 7. Reconcile customer debts
+    this.reconcileCustomerDebts(businessId);
+
+    // 8. Add Audit Log
+    this.addAuditLog(
+      businessId,
+      userName,
+      'حذف فاتورة بيع',
+      `تم حذف الفاتورة ${sale.invoice_number} بقيمة ${sale.total} DH، وإرجاع ${totalRestoredQty} قطعة إلى المخزون وتخفيض رقم المعاملات.`
+    );
+
+    return { success: true, sale, restoredItemsCount: totalRestoredQty };
+  }
+
   // --- Sales Return ---
   public createSaleReturn(returnData: SaleReturn): void {
     const returns = this.get<SaleReturn>('sale_returns');
@@ -1447,6 +1574,11 @@ class LocalDatabase {
 
     const filteredExpenses = expenses.filter(e => e.id !== expenseId);
     this.set('expenses', filteredExpenses);
+
+    // Queue for cloud delete and tombstone
+    this.addToDeleteQueue('expenses', expenseId);
+    this.addToTombstones('expenses', expenseId);
+    this.removeSyncedId('expenses', expenseId);
 
     this.addAuditLog(
       businessId,

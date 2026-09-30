@@ -75,6 +75,7 @@ interface AppContextType {
   loginWithSupabase: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   loginOfflineDemo: () => void;
   logout: () => Promise<void>;
+  updatePassword: (newPassword: string, currentPassword?: string) => Promise<{ success: boolean; error?: string }>;
 
   // Offline & Sync
   isOnline: boolean;
@@ -248,7 +249,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             patente: remoteBiz.patente || '',
             cnss: remoteBiz.cnss || '',
             logo: remoteBiz.logo || '',
-            stamp: remoteBiz.stamp || '',
+            stamp: remoteBiz.stamp === 'DISABLED' ? '' : (remoteBiz.stamp || ''),
+            stampEnabled: remoteBiz.stamp === 'DISABLED' ? false : (remoteBiz.stamp_enabled ?? true),
             invoiceColor: remoteBiz.invoice_color || '#C02626',
             receiptFooter: remoteBiz.receipt_footer || '',
             a4Footer: remoteBiz.a4_footer || '',
@@ -489,6 +491,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuthEmail('');
   };
 
+  const updatePassword = async (
+    newPassword: string, 
+    currentPassword?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (localStorage.getItem('tajer_demo_mode') === 'true') {
+      return { success: true };
+    }
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      return {
+        success: false,
+        error: lang === 'ar' ? 'تعذر الاتصال بالسيرفر. يرجى التأكد من الاتصال بالإنترنت.' : 'Connexion au serveur impossible. Vérifiez votre connexion internet.',
+      };
+    }
+
+    try {
+      // If current password provided and user has email, verify current password first
+      if (currentPassword && authEmail) {
+        const { error: verifyErr } = await supabase.auth.signInWithPassword({
+          email: authEmail.trim(),
+          password: currentPassword,
+        });
+
+        if (verifyErr) {
+          return {
+            success: false,
+            error: lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة.' : 'Le mot de passe actuel est incorrect.',
+          };
+        }
+      }
+
+      // Update password in Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        let msg = error.message;
+        if (msg.toLowerCase().includes('password should be at least')) {
+          msg = lang === 'ar' ? 'يجب أن تحتوي كلمة المرور على 6 أحرف على الأقل.' : 'Le mot de passe doit comporter au moins 6 caractères.';
+        }
+        return { success: false, error: msg };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || (lang === 'ar' ? 'حدث خطأ أثناء تحديث كلمة المرور.' : 'Une erreur est survenue.'),
+      };
+    }
+  };
+
   // 2. Localization and Online Status (moved to top of provider)
 
   useEffect(() => {
@@ -546,7 +602,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let lastSyncTime = 0;
     const runDebouncedSync = () => {
       const now = Date.now();
-      if (now - lastSyncTime < 3000) return;
+      if (now - lastSyncTime < 15000) return; // 15-second minimum cooldown
       lastSyncTime = now;
       if (navigator.onLine) {
         syncEngine.syncAll().then(res => {
@@ -562,14 +618,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.success) setDataVersion(v => v + 1);
     }).catch(() => {});
 
-    // 2. Periodic sync every 10 seconds for fast multi-PC synchronization
+    // 2. Gentle safety sync every 5 minutes (reduced from aggressive 10s to prevent Supabase Egress spike)
     const interval = setInterval(() => {
       runDebouncedSync();
-    }, 10000);
+    }, 300000);
 
-    // 3. Sync on app focus / tab switch / resume
+    // 3. Sync on app focus / tab resume (throttled to at least 60 seconds)
     const handleResumeOrFocus = () => {
-      runDebouncedSync();
+      const now = Date.now();
+      if (now - lastSyncTime >= 60000) {
+        runDebouncedSync();
+      }
     };
 
     window.addEventListener('focus', handleResumeOrFocus);
@@ -581,7 +640,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     document.addEventListener('visibilitychange', handleVisibility);
 
-    // 4. Realtime subscription for instant multi-device synchronization
+    // 4. Realtime subscription: Direct local state updates without triggering re-upload cascades
     const supabase = getSupabase();
     let realtimeChannel: any = null;
     if (supabase && isSupabaseConfigured()) {
@@ -598,16 +657,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   db.removeProductLocally(deletedId);
                   setDataVersion(v => v + 1);
                 }
-                runDebouncedSync();
-              } else if (payload.eventType === 'UPDATE') {
-                if (payload.new && payload.new.is_active === false) {
-                  db.removeProductLocally(payload.new.id);
+              } else if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                const p = payload.new;
+                if (p && p.business_id === business.id) {
+                  if (p.is_active === false) {
+                    db.removeProductLocally(p.id);
+                  } else {
+                    db.saveProduct({
+                      id: p.id,
+                      business_id: p.business_id,
+                      branch_id: p.branch_id || branch.id,
+                      category_id: p.category_id,
+                      barcode: p.barcode || '',
+                      sku: p.sku || '',
+                      name: p.name,
+                      description: p.description,
+                      purchase_price: Number(p.purchase_price || 0),
+                      sale_price: Number(p.sale_price || 0),
+                      wholesale_price: p.wholesale_price ? Number(p.wholesale_price) : undefined,
+                      current_stock: Number(p.current_stock || 0),
+                      min_stock: Number(p.min_stock || 0),
+                      unit: p.unit || 'قطعة',
+                      tax_rate: Number(p.tax_rate ?? 20),
+                      is_active: p.is_active !== false,
+                      image_url: p.image_url,
+                      created_at: p.created_at || new Date().toISOString(),
+                      updated_at: p.updated_at || new Date().toISOString(),
+                    }, 'مزامنة السحابة', true);
+                  }
                   setDataVersion(v => v + 1);
-                } else {
-                  runDebouncedSync();
                 }
-              } else {
-                runDebouncedSync();
               }
             }
           )
@@ -637,8 +716,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (payload.eventType === 'DELETE' && payload.old?.id) {
                 db.removeCategoryLocally(payload.old.id);
                 setDataVersion(v => v + 1);
+              } else if (payload.new && payload.new.business_id === business.id) {
+                const c = payload.new;
+                db.saveCategory({
+                  id: c.id,
+                  business_id: c.business_id,
+                  name: c.name,
+                  color: c.color || '#0d9488',
+                  icon: c.icon || 'tag',
+                  created_at: c.created_at || new Date().toISOString(),
+                });
+                setDataVersion(v => v + 1);
               }
-              runDebouncedSync();
             }
           )
           .on(
@@ -648,8 +737,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (payload.eventType === 'DELETE' && payload.old?.id) {
                 db.removeCustomerLocally(payload.old.id);
                 setDataVersion(v => v + 1);
+              } else if (payload.new && payload.new.business_id === business.id) {
+                const c = payload.new;
+                db.saveCustomer({
+                  id: c.id,
+                  business_id: c.business_id,
+                  name: c.name,
+                  phone: c.phone || '',
+                  address: c.address,
+                  city: c.city,
+                  ice: c.ice,
+                  ifNumber: c.if_number,
+                  notes: c.notes,
+                  credit_limit: Number(c.credit_limit || 0),
+                  total_spent: Number(c.total_spent || 0),
+                  total_debt: Number(c.total_debt || 0),
+                  created_at: c.created_at || new Date().toISOString(),
+                  updated_at: c.updated_at || new Date().toISOString(),
+                });
+                setDataVersion(v => v + 1);
               }
-              runDebouncedSync();
             }
           )
           .on(
@@ -659,15 +766,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (payload.eventType === 'DELETE' && payload.old?.id) {
                 db.removeSupplierLocally(payload.old.id);
                 setDataVersion(v => v + 1);
+              } else if (payload.new && payload.new.business_id === business.id) {
+                const s = payload.new;
+                db.saveSupplier({
+                  id: s.id,
+                  business_id: s.business_id,
+                  name: s.name,
+                  phone: s.phone || '',
+                  address: s.address,
+                  city: s.city,
+                  ice: s.ice,
+                  ifNumber: s.if_number,
+                  notes: s.notes,
+                  total_purchased: Number(s.total_purchased || 0),
+                  total_debt: Number(s.total_debt || 0),
+                  created_at: s.created_at || new Date().toISOString(),
+                  updated_at: s.updated_at || new Date().toISOString(),
+                });
+                setDataVersion(v => v + 1);
               }
-              runDebouncedSync();
             }
           )
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'sales' },
-            () => {
-              runDebouncedSync();
+            (payload: any) => {
+              if (payload.eventType === 'INSERT' && payload.new && payload.new.business_id === business.id) {
+                // If new sale from another device, insert directly into local sales if not existing
+                const existing = db.getSales(business.id).find(s => s.id === payload.new.id);
+                if (!existing) {
+                  const currentSales = db.getSales(business.id);
+                  db.set('sales', [payload.new, ...currentSales]);
+                  setDataVersion(v => v + 1);
+                }
+              }
             }
           )
           .subscribe();
@@ -982,6 +1114,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithSupabase,
         loginOfflineDemo,
         logout,
+        updatePassword,
         isOnline,
         syncStatus,
         triggerSync,

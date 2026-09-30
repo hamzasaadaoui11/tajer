@@ -234,29 +234,55 @@ export const BarcodeScannerModal: React.FC = () => {
         throw new Error("Video element ref not ready");
       }
 
-      // 3. Define optimized HD constraints for razor-sharp barcodes
-      const constraints: MediaStreamConstraints = {
-        video: targetDeviceId ? {
-          deviceId: { exact: targetDeviceId },
-          width: { min: 640, ideal: 1280, max: 1920 },
-          height: { min: 480, ideal: 720, max: 1080 },
-        } : {
-          facingMode: facingMode,
-          width: { min: 640, ideal: 1280, max: 1920 },
-          height: { min: 480, ideal: 720, max: 1080 },
+      // 3. Define fallback attempts for camera constraints to handle all devices/emulators/browsers
+      let started = false;
+      const constraintAttempts: MediaStreamConstraints[] = [
+        // Attempt 1: HD Resolution constraints
+        {
+          video: targetDeviceId ? {
+            deviceId: { exact: targetDeviceId },
+            width: { min: 640, ideal: 1280, max: 1920 },
+            height: { min: 480, ideal: 720, max: 1080 },
+          } : {
+            facingMode: facingMode,
+            width: { min: 640, ideal: 1280, max: 1920 },
+            height: { min: 480, ideal: 720, max: 1080 },
+          }
+        },
+        // Attempt 2: Simpler constraints with target device or facing, without strict width/height limits
+        {
+          video: targetDeviceId ? {
+            deviceId: targetDeviceId,
+          } : {
+            facingMode: facingMode
+          }
+        },
+        // Attempt 3: Absolute fallback - request any available video feed
+        {
+          video: true
         }
-      };
+      ];
 
-      // 4. Start ZXing continuous decoding
-      await codeReader.decodeFromConstraints(
-        constraints,
-        videoRef.current,
-        (result, error) => {
-          if (result && !isScannerPaused) {
-            handleBarcodeFound(result.getText());
+      for (let i = 0; i < constraintAttempts.length; i++) {
+        try {
+          await codeReader.decodeFromConstraints(
+            constraintAttempts[i],
+            videoRef.current,
+            (result, error) => {
+              if (result && !isScannerPaused) {
+                handleBarcodeFound(result.getText());
+              }
+            }
+          );
+          started = true;
+          break; // successfully started!
+        } catch (attemptError) {
+          console.warn(`ZXing camera start attempt ${i + 1} failed:`, attemptError);
+          if (i === constraintAttempts.length - 1) {
+            throw attemptError; // if last attempt fails, throw it
           }
         }
-      );
+      }
 
       setCameraActive(true);
       setCameraError(null);

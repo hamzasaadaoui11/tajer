@@ -173,14 +173,13 @@ export const ExpensesView: React.FC = () => {
   };
 
   // Delete Expense
-  const handleDeleteExpense = (id: string) => {
+  const handleDeleteExpense = async (id: string) => {
     const confirmMsg = lang === 'ar' 
       ? 'هل أنت متأكد من حذف هذا المصروف؟ سيتم إرجاع المبلغ لجهة الصندوق إن كان نقداً.'
       : 'Êtes-vous sûr de vouloir supprimer cette dépense ? Le montant sera restitué à la caisse si payé en espèces.';
     if (window.confirm(confirmMsg)) {
-      db.deleteExpense(id, business.id, user?.name || 'Admin');
+      await syncEngine.deleteExpenseEverywhere(id, business.id, user?.name || 'Admin');
       refreshData();
-      syncEngine.syncAll().then(refreshData).catch(() => {});
     }
   };
 

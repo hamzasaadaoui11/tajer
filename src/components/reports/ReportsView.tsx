@@ -264,21 +264,44 @@ export const ReportsView: React.FC = () => {
         {/* Gross Margin */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <span className="text-xs text-slate-500 font-semibold">{lang === 'ar' ? 'الهامش الإجمالي (Marge brute)' : 'Marge Brute Globale'}</span>
-          <div className="text-2xl font-black text-emerald-600 mt-1">
-            +{formatCurrency(grossProfit)}
+          <div className={`text-2xl font-black mt-1 ${grossProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {grossProfit > 0 
+              ? `+${formatCurrency(grossProfit)}` 
+              : grossProfit < 0 
+                ? `-${formatCurrency(Math.abs(grossProfit))}` 
+                : formatCurrency(0)}
           </div>
-          <span className="text-[11px] text-emerald-600 font-bold mt-1 inline-block">
+          <span className={`text-[11px] font-bold mt-1 inline-block ${grossProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(1) : 0}% {lang === 'ar' ? 'من المعاملات' : 'du C.A.'}
           </span>
         </div>
 
         {/* Net Profit */}
-        <div className="bg-teal-600 text-white rounded-3xl p-5 shadow-md shadow-teal-600/20">
-          <span className="text-xs text-teal-100 font-semibold">{lang === 'ar' ? 'الربح الصافي الفعلي (Bénéfice Net)' : 'Bénéfice Net Réel'}</span>
-          <div className="text-2xl font-black tracking-tight mt-1">
-            +{formatCurrency(netProfit)}
+        <div className={`rounded-3xl p-5 shadow-md transition-all duration-200 ${
+          netProfit >= 0 
+            ? 'bg-teal-600 text-white shadow-teal-600/20' 
+            : 'bg-rose-600 text-white shadow-rose-600/25 ring-2 ring-rose-400/30'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-semibold ${netProfit >= 0 ? 'text-teal-100' : 'text-rose-100'}`}>
+              {netProfit >= 0 
+                ? (lang === 'ar' ? 'الربح الصافي الفعلي (Bénéfice Net)' : 'Bénéfice Net Réel')
+                : (lang === 'ar' ? 'الربح الصافي الفعلي (عجز / خسارة)' : 'Bénéfice Net Réel (Déficit)')}
+            </span>
+            {netProfit < 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-rose-700/90 text-[10px] font-black tracking-wide text-white border border-rose-400/30">
+                {lang === 'ar' ? 'عجز' : 'Déficit'}
+              </span>
+            )}
           </div>
-          <span className="text-[11px] text-teal-100 mt-1 inline-block">
+          <div className="text-2xl font-black tracking-tight mt-1">
+            {netProfit > 0 
+              ? `+${formatCurrency(netProfit)}` 
+              : netProfit < 0 
+                ? `-${formatCurrency(Math.abs(netProfit))}`
+                : formatCurrency(0)}
+          </div>
+          <span className={`text-[11px] mt-1 inline-block ${netProfit >= 0 ? 'text-teal-100' : 'text-rose-100 font-medium'}`}>
             {lang === 'ar' 
               ? `بعد خصم مصاريف المحل (${formatCurrency(totalExp)})` 
               : `Après déduction des charges (${formatCurrency(totalExp)})`}
@@ -371,7 +394,7 @@ export const ReportsView: React.FC = () => {
               {lang === 'ar' ? 'إجمالي تكاليف هذه الفترة المخصومة من الأرباح:' : 'Total des charges déduites du bénéfice :'}
             </div>
             <div className="text-sm font-black text-rose-600 mt-0.5">
-              -{formatCurrency(totalExp)}
+              {totalExp > 0 ? `-${formatCurrency(totalExp)}` : formatCurrency(0)}
             </div>
           </div>
         </div>

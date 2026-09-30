@@ -12,7 +12,15 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
-  Check
+  Check,
+  Lock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  UserCheck
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
@@ -31,10 +39,23 @@ export const SettingsView: React.FC = () => {
     authEmail,
     dataVersion,
     refreshData,
+    user,
+    updatePassword,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'store' | 'general' | 'categories'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'general' | 'categories' | 'security'>('store');
   const [storeSection, setStoreSection] = useState<'branding' | 'general' | 'legal' | 'footer'>('branding');
+
+  // Password Change State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
 
   // New Categories State
   const [newCatName, setNewCatName] = useState('');
@@ -54,7 +75,11 @@ export const SettingsView: React.FC = () => {
 
   // Business form state
   const [name, setName] = useState(business.name);
-  const [activity, setActivity] = useState(business.activity);
+  const [activity, setActivity] = useState(
+    business.activity && business.activity !== 'grocery' && business.activity !== 'general_store'
+      ? business.activity
+      : ''
+  );
   const [phone, setPhone] = useState(business.phone);
   const [city, setCity] = useState(business.city);
   const [address, setAddress] = useState(business.address);
@@ -67,37 +92,85 @@ export const SettingsView: React.FC = () => {
   const [receiptFooter, setReceiptFooter] = useState(business.receiptFooter || '');
   const [a4Footer, setA4Footer] = useState(business.a4Footer || '');
   const [logo, setLogo] = useState(business.logo || '');
-  const [stamp, setStamp] = useState(business.stamp || '');
+  const [stamp, setStamp] = useState(business.stamp === 'DISABLED' ? '' : (business.stamp || ''));
+  const [stampEnabled, setStampEnabled] = useState(
+    business.stampEnabled !== undefined
+      ? business.stampEnabled
+      : (business.stamp !== 'DISABLED')
+  );
   const [invoiceColor, setInvoiceColor] = useState(business.invoiceColor || '#C02626');
 
   // TVA Settings States
   const [taxEnabled, setTaxEnabled] = useState(business.taxEnabled ?? false);
   const [defaultTaxRate, setDefaultTaxRate] = useState(business.defaultTaxRate ?? 20);
 
-  // Logo Upload
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Helper to compress images automatically
+  const compressImage = (file: File, maxDim = 480, quality = 0.75): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setLogo(base64);
-    };
-    reader.readAsDataURL(file);
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            resolve(dataUrl);
+          } else {
+            resolve(event.target?.result as string);
+          }
+        };
+        img.onerror = () => resolve(event.target?.result as string);
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
-  // Stamp Upload
-  const handleStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Logo Upload with automatic compression
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    try {
+      const compressed = await compressImage(file, 400, 0.75);
+      setLogo(compressed);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (event) => setLogo(event.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setStamp(base64);
-    };
-    reader.readAsDataURL(file);
+  // Stamp Upload with automatic compression
+  const handleStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file, 400, 0.75);
+      setStamp(compressed);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (event) => setStamp(event.target?.result as string);
+      reader.readAsDataURL(file);
+    }
   };
 
   // Load categories
@@ -144,6 +217,56 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  // Password Change Handler
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!newPassword) {
+      setPasswordError(
+        lang === 'ar' ? 'يرجى إدخال كلمة المرور الجديدة' : 'Veuillez saisir le nouveau mot de passe'
+      );
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError(
+        lang === 'ar' ? 'كلمة المرور يجب أن لا تقل عن 6 أحرف أو أرقام' : 'Le mot de passe doit comporter au moins 6 caractères'
+      );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError(
+        lang === 'ar' ? 'كلمة المرور الجديدة وتأكيدها غير متطابقين' : 'Les mots de passe ne correspondent pas'
+      );
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      const res = await updatePassword(newPassword, currentPassword.trim() || undefined);
+      setPasswordLoading(false);
+
+      if (res.success) {
+        setPasswordSuccess(
+          lang === 'ar' 
+            ? 'تم تغيير وتحديث كلمة المرور بنجاح في السحابة! يمكنك الآن استخدامها للدخول.' 
+            : 'Mot de passe mis à jour avec succès dans le Cloud !'
+        );
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        setPasswordError(res.error || (lang === 'ar' ? 'فشل تغيير كلمة المرور' : 'Impossible de modifier le mot de passe'));
+      }
+    } catch (err: any) {
+      setPasswordLoading(false);
+      setPasswordError(err?.message || (lang === 'ar' ? 'حدث خطأ غير متوقع' : 'Une erreur est survenue'));
+    }
+  };
+
   // Save Store Settings
   const handleSaveStore = (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,7 +285,8 @@ export const SettingsView: React.FC = () => {
       receiptFooter,
       a4Footer,
       logo,
-      stamp,
+      stamp: stampEnabled ? stamp : 'DISABLED',
+      stampEnabled,
       invoiceColor,
       taxEnabled,
       defaultTaxRate,
@@ -215,33 +339,54 @@ export const SettingsView: React.FC = () => {
           </button>
 
           {/* Tab switch */}
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold gap-1 w-full sm:w-auto">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 sm:p-1.5 rounded-2xl text-xs font-bold gap-1 w-full sm:w-auto overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveTab('store')}
-              className={`px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 ${
-                activeTab === 'store' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
+              className={`px-2.5 sm:px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 whitespace-nowrap ${
+                activeTab === 'store' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              <Store className="w-4 h-4" />
-              <span>{lang === 'ar' ? 'بيانات المحل' : 'Infos Magasin'}</span>
+              <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>
+                <span className="sm:hidden">{lang === 'ar' ? 'المحل' : 'Magasin'}</span>
+                <span className="hidden sm:inline">{lang === 'ar' ? 'بيانات المحل' : 'Infos Magasin'}</span>
+              </span>
             </button>
             <button
               onClick={() => setActiveTab('categories')}
-              className={`px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 ${
-                activeTab === 'categories' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
+              className={`px-2.5 sm:px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 whitespace-nowrap ${
+                activeTab === 'categories' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              <Palette className="w-4 h-4" />
-              <span>{lang === 'ar' ? 'إدارة الفئات' : 'Catégories'}</span>
+              <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>
+                <span className="sm:hidden">{lang === 'ar' ? 'الفئات' : 'Catégories'}</span>
+                <span className="hidden sm:inline">{lang === 'ar' ? 'إدارة الفئات' : 'Catégories'}</span>
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('security')}
+              className={`px-2.5 sm:px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 whitespace-nowrap ${
+                activeTab === 'security' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>
+                <span className="sm:hidden">{lang === 'ar' ? 'الأمان' : 'Sécurité'}</span>
+                <span className="hidden sm:inline">{lang === 'ar' ? 'الأمان وكلمة المرور' : 'Sécurité & Mot de passe'}</span>
+              </span>
             </button>
             <button
               onClick={() => setActiveTab('general')}
-              className={`px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 ${
-                activeTab === 'general' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500'
+              className={`px-2.5 sm:px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 whitespace-nowrap ${
+                activeTab === 'general' ? 'bg-white dark:bg-slate-700 text-teal-600 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              <Globe className="w-4 h-4" />
-              <span>{lang === 'ar' ? 'المظهر واللغة' : 'Apparence & Langue'}</span>
+              <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>
+                <span className="sm:hidden">{lang === 'ar' ? 'المظهر' : 'Général'}</span>
+                <span className="hidden sm:inline">{lang === 'ar' ? 'المظهر واللغة' : 'Apparence & Langue'}</span>
+              </span>
             </button>
           </div>
         </div>
@@ -374,49 +519,99 @@ export const SettingsView: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Stamp / Cachet Upload Card */}
-                    <div className={`p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-150 dark:border-slate-700/60 flex items-center gap-3.5 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-                      {stamp ? (
-                        <div className="relative group shrink-0">
-                          <img
-                            src={stamp}
-                            alt="Company Stamp"
-                            className="w-16 h-16 rounded-xl object-contain border border-slate-100 bg-slate-50 p-1"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setStamp('')}
-                            className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 text-white shadow-xs hover:bg-rose-700 transition cursor-pointer"
-                            title={lang === 'ar' ? 'حذف الختم' : 'Supprimer le cachet'}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                    {/* Stamp / Cachet Upload Card with Activate/Deactivate Toggle */}
+                    <div className={`p-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-150 dark:border-slate-700/60 space-y-3 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+                      {/* Top Row: Title + Toggle Switch */}
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                            {lang === 'ar' ? 'ختم وتوقيع المحل (Cachet)' : 'Cachet & signature (Tampon)'}
+                          </span>
+                          <span className="block text-[10.5px] text-slate-400 mt-0.5">
+                            {stampEnabled
+                              ? (lang === 'ar' ? 'مفعل: سيظهر الختم أسفل فواتير المبيعات A4' : 'Activé : s\'affiche au bas des factures A4')
+                              : (lang === 'ar' ? 'معطل: لن يظهر أي ختم أو توقيع افتراضي على الفاتورة' : 'Désactivé : aucun cachet par défaut sur la facture')}
+                          </span>
                         </div>
-                      ) : (
-                        <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-900 text-slate-400 shrink-0">
-                          <FileText className="w-6 h-6 stroke-1" />
-                        </div>
-                      )}
-                      
-                      <div className="flex-1 min-w-0">
-                        <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                          {lang === 'ar' ? 'ختم وتوقيع المحل (Cachet)' : 'Cachet & signature (Tampon)'}
-                        </span>
-                        <span className="block text-[10px] text-slate-400 mt-0.5">
-                          {lang === 'ar' ? 'سيظهر تلقائياً بأسفل الفواتير' : 'S\'affiche au bas des factures'}
-                        </span>
-                        
-                        <label className="inline-block mt-2 px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-[11px] font-bold cursor-pointer transition">
-                          <Upload className="w-3 h-3 inline-block me-1" />
-                          <span>{lang === 'ar' ? 'تحميل الختم' : 'Téléverser le cachet'}</span>
+
+                        {/* Toggle switch */}
+                        <label className="relative inline-flex items-center cursor-pointer select-none shrink-0" title={stampEnabled ? (lang === 'ar' ? 'تعطيل الختم' : 'Désactiver') : (lang === 'ar' ? 'تفعيل الختم' : 'Activer')}>
                           <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleStampUpload}
-                            className="hidden"
+                            type="checkbox"
+                            checked={stampEnabled}
+                            onChange={(e) => setStampEnabled(e.target.checked)}
+                            className="sr-only peer"
                           />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
                         </label>
                       </div>
+
+                      {/* Content when enabled */}
+                      {stampEnabled ? (
+                        <div className="pt-2.5 border-t border-slate-100 dark:border-slate-700/60 flex items-center gap-3.5 animate-in fade-in duration-200">
+                          {stamp ? (
+                            <div className="relative group shrink-0">
+                              <img
+                                src={stamp}
+                                alt="Company Stamp"
+                                className="w-14 h-14 rounded-xl object-contain border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-1"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setStamp('')}
+                                className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 text-white shadow-xs hover:bg-rose-700 transition cursor-pointer"
+                                title={lang === 'ar' ? 'حذف الختم' : 'Supprimer le cachet'}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-900 text-slate-400 shrink-0">
+                              <FileText className="w-5 h-5 stroke-1" />
+                            </div>
+                          )}
+
+                          <div className="flex-1 min-w-0">
+                            <span className="block text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                              {stamp 
+                                ? (lang === 'ar' ? 'ختم مخصص مرفوع' : 'Cachet personnalisé importé')
+                                : (lang === 'ar' ? 'الختم الأزرق الرسمي الافتراضي للمحل' : 'Cachet officiel bleu par défaut')}
+                            </span>
+                            
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <label className="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-[11px] font-bold cursor-pointer transition">
+                                <Upload className="w-3 h-3 inline-block me-1" />
+                                <span>{stamp ? (lang === 'ar' ? 'تغيير صورة الختم' : 'Changer') : (lang === 'ar' ? 'تحميل ختم مخصص' : 'Téléverser')}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleStampUpload}
+                                  className="hidden"
+                                />
+                              </label>
+
+                              {stamp && (
+                                <button
+                                  type="button"
+                                  onClick={() => setStamp('')}
+                                  className="text-[11px] text-slate-400 hover:text-rose-600 underline cursor-pointer"
+                                >
+                                  {lang === 'ar' ? 'الرجوع للافتراضي' : 'Par défaut'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0"></span>
+                          <span>
+                            {lang === 'ar' 
+                              ? 'الختم معطل: ستطبع الفواتير نظيفة بدون أي خاتم أو توقيع افتراضي.'
+                              : 'Cachet désactivé : les factures s\'imprimeront sans aucun tampon ni signature par défaut.'}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Theme Color Picker Card */}
@@ -919,6 +1114,203 @@ export const SettingsView: React.FC = () => {
                 ? '💡 تذكير: يمكنك استعمال هذه الفئات مباشرة أثناء إضافة أو تعديل أي سلعة في المحل لتبسيط تنظيم متجرك.'
                 : '💡 Astuce : Vous pouvez utiliser ces catégories lors de l\'ajout ou de l\'modification de vos produits.'}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Security & Password */}
+      {activeTab === 'security' && (
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+          {/* Card 1: Change Password Form */}
+          <form onSubmit={handlePasswordChange} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5 h-fit">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-950/40 text-teal-600 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  {lang === 'ar' ? 'تغيير كلمة المرور' : 'Modifier le mot de passe'}
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {lang === 'ar' ? 'قم بتحديث كلمة مرور حسابك لتأمين الدخول' : 'Mettez à jour le mot de passe de votre compte'}
+                </p>
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {passwordError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 flex items-start gap-2.5 text-rose-700 dark:text-rose-300 text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span className="font-medium leading-relaxed">{passwordError}</span>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {passwordSuccess && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-start gap-2.5 text-emerald-700 dark:text-emerald-300 text-xs">
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                <span className="font-bold leading-relaxed">{passwordSuccess}</span>
+              </div>
+            )}
+
+            {/* Current Password */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                {lang === 'ar' ? 'كلمة المرور الحالية' : 'Mot de passe actuel'}
+              </label>
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-teal-500 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className={`absolute ${lang === 'ar' ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer`}
+                >
+                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                {lang === 'ar' ? 'أدخل كلمة المرور الحالية لتأكيد هويتك' : 'Entrez votre mot de passe actuel pour vérification'}
+              </p>
+            </div>
+
+            {/* New Password */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                {lang === 'ar' ? 'كلمة المرور الجديدة' : 'Nouveau mot de passe'}
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-teal-500 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className={`absolute ${lang === 'ar' ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer`}
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                {lang === 'ar' ? 'يجب أن تحتوي على 6 أحرف أو أرقام على الأقل' : 'Doit comporter au moins 6 caractères'}
+              </p>
+            </div>
+
+            {/* Confirm Password */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                {lang === 'ar' ? 'تأكيد كلمة المرور الجديدة' : 'Confirmer le nouveau mot de passe'}
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-teal-500 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className={`absolute ${lang === 'ar' ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer`}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={passwordLoading}
+              className="w-full py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition active:scale-95 shadow-md shadow-teal-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {passwordLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>{lang === 'ar' ? 'جاري تحديث كلمة المرور...' : 'Mise à jour en cours...'}</span>
+                </>
+              ) : (
+                <>
+                  <KeyRound className="w-4 h-4" />
+                  <span>{lang === 'ar' ? 'تحديث وحفظ كلمة المرور الجديدة' : 'Enregistrer le nouveau mot de passe'}</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Card 2: Account Overview & Security Tips */}
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center shrink-0">
+                  <UserCheck className="w-5 h-5 text-teal-600" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs text-slate-900 dark:text-white">
+                    {lang === 'ar' ? 'معلومات حساب المتجر' : 'Informations du compte'}
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    {lang === 'ar' ? 'بيانات الجلسة السحابية الحالية' : 'Session Cloud active'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                  <span className="text-slate-500 font-medium">{lang === 'ar' ? 'البريد الإلكتروني:' : 'Email :'}</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 font-mono text-[11px]">
+                    {authEmail || user?.email || (lang === 'ar' ? 'حساب محلي' : 'Compte local')}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                  <span className="text-slate-500 font-medium">{lang === 'ar' ? 'الدور والصلاحية:' : 'Rôle :'}</span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-bold text-[10px]">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    {user?.role === 'ADMIN' ? (lang === 'ar' ? 'المدير العام (Admin)' : 'Administrateur') : user?.role || 'Admin'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                  <span className="text-slate-500 font-medium">{lang === 'ar' ? 'حالة السحابة:' : 'Statut Cloud :'}</span>
+                  <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    {lang === 'ar' ? 'متصل ومحمي' : 'Connecté & Sécurisé'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-teal-500/10 via-teal-500/5 to-transparent rounded-3xl p-6 border border-teal-200/50 dark:border-teal-900/30 text-xs space-y-3">
+              <h4 className="font-bold text-teal-900 dark:text-teal-200 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-teal-600" />
+                <span>{lang === 'ar' ? 'حماية وأمان الحساب' : 'Sécurité de votre compte'}</span>
+              </h4>
+              <ul className="space-y-2 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                <li className="flex items-start gap-2">
+                  <span className="text-teal-600 font-bold">•</span>
+                  <span>{lang === 'ar' ? 'بمجرد تغيير كلمة المرور، ستتمكن من تسجيل الدخول بها في هاتفك، حاسوبك، أو طابليط في آن واحد.' : 'Une fois modifié, vous pouvez vous connecter avec votre nouveau mot de passe sur tous vos appareils.'}</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-teal-600 font-bold">•</span>
+                  <span>{lang === 'ar' ? 'يتم تشفير كلمات المرور باستخدام أحدث معايير الأمان السحابية لحماية بيانات متجرك وأرباحك.' : 'Vos identifiants sont chiffrés avec les normes de sécurité les plus strictes.'}</span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       )}

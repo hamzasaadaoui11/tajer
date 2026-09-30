@@ -16,7 +16,8 @@ export type MerchantActivity =
   | 'restaurant' // مطعم
   | 'cafe' // مقهى
   | 'general_store' // متجر عام
-  | 'other';
+  | 'other'
+  | (string & {});
 
 export interface Business {
   id: string;
@@ -33,6 +34,7 @@ export interface Business {
   cnss?: string;
   logo?: string;
   stamp?: string; // Cachet / Signature de l'entreprise (Base64)
+  stampEnabled?: boolean; // Activer / Désactiver le cachet sur les factures A4
   invoiceColor?: string; // Hex color for invoices (default '#C02626')
   receiptFooter?: string;
   a4Footer?: string; // Pied de page personnalisé pour Facture A4

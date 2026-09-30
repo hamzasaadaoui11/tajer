@@ -548,8 +548,8 @@ export const ProductsView: React.FC = () => {
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-400 font-medium">{lang === 'ar' ? 'الربح المتوقع' : 'Bénéfice prévu'}</div>
-                      <div className="font-bold text-emerald-600 mt-0.5">
-                        +{formatCurrency(margin)}
+                      <div className={`font-bold mt-0.5 ${margin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {margin > 0 ? `+${formatCurrency(margin)}` : margin < 0 ? `-${formatCurrency(Math.abs(margin))}` : formatCurrency(0)}
                       </div>
                     </div>
                   </div>
@@ -642,8 +642,8 @@ export const ProductsView: React.FC = () => {
                           {formatCurrency(p.sale_price)}
                         </td>
                         <td className="p-3.5">
-                          <span className="font-semibold text-emerald-600">
-                            +{formatCurrency(margin)}
+                          <span className={`font-semibold ${margin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {margin > 0 ? `+${formatCurrency(margin)}` : margin < 0 ? `-${formatCurrency(Math.abs(margin))}` : formatCurrency(0)}
                           </span>
                         </td>
                         <td className="p-3.5">
@@ -923,8 +923,8 @@ export const ProductsView: React.FC = () => {
                   />
                 </div>
 
-                <div className="col-span-2 text-center text-xs font-bold text-emerald-600 pt-1 border-t border-slate-200 dark:border-slate-700">
-                  {lang === 'ar' ? 'هامش الربح في القطعة:' : 'Marge unitaire :'} +{formatMAD(profitMargin)} ({marginPercent}%)
+                <div className={`col-span-2 text-center text-xs font-bold pt-1 border-t border-slate-200 dark:border-slate-700 ${profitMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {lang === 'ar' ? 'هامش الربح في القطعة:' : 'Marge unitaire :'} {profitMargin > 0 ? `+${formatMAD(profitMargin, lang)}` : profitMargin < 0 ? `-${formatMAD(Math.abs(profitMargin), lang)}` : formatMAD(0, lang)} ({marginPercent}%)
                 </div>
               </div>
 

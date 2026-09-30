@@ -13,7 +13,9 @@ import {
   ChevronLeft,
   ChevronRight,
   CreditCard,
-  DollarSign
+  DollarSign,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
@@ -35,6 +37,10 @@ export const SalesView: React.FC = () => {
   const [editPaymentMethod, setEditPaymentMethod] = useState<PaymentMethod>('CREDIT');
   const [editCustomerId, setEditCustomerId] = useState('');
   const [editAmountPaid, setEditAmountPaid] = useState('0');
+
+  // Delete Sale Modal State
+  const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 7;
@@ -151,6 +157,29 @@ export const SalesView: React.FC = () => {
     alert(lang === 'ar' 
       ? `تم تسجيل المرتجع بنجاح واسترجاع السلع للمخزون بقيمة ${formatCurrency(totalRefund)}`
       : `Retour enregistré avec succès et stock réintégré pour une valeur de ${formatCurrency(totalRefund)}`);
+  };
+
+  const handleConfirmDeleteSale = async () => {
+    if (!saleToDelete) return;
+    setDeleteLoading(true);
+    try {
+      const res = await syncEngine.deleteSaleEverywhere(saleToDelete.id, business.id, branch.id, user.name);
+      setSaleToDelete(null);
+      refreshData();
+      alert(lang === 'ar'
+        ? `تم حذف الفاتورة ${saleToDelete.invoice_number} بنجاح، وإرجاع ${res.restoredItemsCount} قطعة إلى المخزون، وخصم قيمتها من المبيعات.`
+        : `Vente ${saleToDelete.invoice_number} supprimée avec succès, ${res.restoredItemsCount} article(s) réintégré(s) au stock et C.A. ajusté.`);
+    } catch (e) {
+      console.error('Delete sale error:', e);
+      const res = db.deleteSale(saleToDelete.id, business.id, branch.id, user.name);
+      setSaleToDelete(null);
+      refreshData();
+      alert(lang === 'ar'
+        ? `تم حذف الفاتورة محلياً، وإرجاع ${res.restoredItemsCount} قطعة إلى المخزون.`
+        : `Vente supprimée localement, ${res.restoredItemsCount} article(s) réintégré(s) au stock.`);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   return (
@@ -296,6 +325,15 @@ export const SalesView: React.FC = () => {
                     title={lang === 'ar' ? 'مشاركة الفاتورة عبر واتساب' : 'Partager sur WhatsApp'}
                   >
                     <Share2 className="w-4 h-4" />
+                  </button>
+
+                  {/* Delete Sale with Stock Restock & Revenue Reversal */}
+                  <button
+                    onClick={() => setSaleToDelete(sale)}
+                    className="p-1.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-500 hover:text-rose-600 border border-rose-200 dark:border-rose-900/60 cursor-pointer transition"
+                    title={lang === 'ar' ? 'حذف الفاتورة وإرجاع السلع للمخزون' : 'Supprimer la vente et réintégrer le stock'}
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -586,6 +624,119 @@ export const SalesView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Sale Confirmation Modal */}
+      {saleToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className={`w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-rose-200 dark:border-rose-900/60 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 space-y-4`}>
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    {lang === 'ar' ? 'حذف فاتورة البيع نهائياً' : 'Supprimer la vente'}
+                  </h3>
+                  <span className="text-xs text-rose-600 dark:text-rose-400 font-mono font-bold">
+                    {saleToDelete.invoice_number}
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSaleToDelete(null)} 
+                disabled={deleteLoading}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer disabled:opacity-40"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Sale Summary Details */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-150 dark:border-slate-700/60 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">{lang === 'ar' ? 'الزبون :' : 'Client :'}</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{saleToDelete.customer_name || (lang === 'ar' ? 'زبون عام' : 'Client comptoir')}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">{lang === 'ar' ? 'المبلغ الإجمالي :' : 'Montant total :'}</span>
+                <span className="font-extrabold text-sm text-slate-900 dark:text-white font-mono">{formatCurrency(saleToDelete.total)}</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-slate-400">{lang === 'ar' ? 'التاريخ :' : 'Date :'}</span>
+                <span className="text-slate-500 font-mono">{new Date(saleToDelete.created_at).toLocaleDateString(lang === 'ar' ? 'ar-MA' : 'fr-FR')} {new Date(saleToDelete.created_at).toLocaleTimeString(lang === 'ar' ? 'ar-MA' : 'fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            </div>
+
+            {/* Impact Details / What happens automatically */}
+            <div className="space-y-2.5">
+              <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                {lang === 'ar' ? 'التأثيرات التلقائية عند الحذف :' : 'Actions automatiques lors de la suppression :'}
+              </div>
+
+              {/* 1. Stock restoration */}
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 text-xs text-emerald-800 dark:text-emerald-300 space-y-1.5">
+                <div className="font-bold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>{lang === 'ar' ? 'إرجاع السلع إلى المخزون (Restock)' : 'Réintégration automatique au stock'}</span>
+                </div>
+                <div className="text-[11px] text-emerald-700 dark:text-emerald-400 ps-5 space-y-0.5 max-h-24 overflow-y-auto">
+                  {saleToDelete.items.map((it, idx) => (
+                    <div key={idx} className="flex justify-between">
+                      <span>• {it.product_name}</span>
+                      <span className="font-bold font-mono">+{it.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Turnover reduction */}
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4 text-amber-600" />
+                  <span>{lang === 'ar' ? 'تخفيض رقم المعاملات والمداخيل' : 'Diminution du chiffre d\'affaires'}</span>
+                </div>
+                <div className="text-[11px] text-amber-700 dark:text-amber-400 ps-5">
+                  {lang === 'ar' 
+                    ? `سيتم خصم ${formatCurrency(saleToDelete.total)} من إجمالي المبيعات، وتعديل رصيد الصندوق والكريدي المرتبط بها فوراً.` 
+                    : `Le C.A. sera diminué de ${formatCurrency(saleToDelete.total)}, et la caisse/créance client sera ajustée.`}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSale}
+                disabled={deleteLoading}
+                className="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition active:scale-95 shadow-md shadow-rose-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {deleteLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{lang === 'ar' ? 'جاري الحذف وتحديث المخزون...' : 'Suppression en cours...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>{lang === 'ar' ? 'تأكيد الحذف واسترجاع المخزون' : 'Confirmer la suppression'}</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSaleToDelete(null)}
+                disabled={deleteLoading}
+                className="px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition cursor-pointer disabled:opacity-40"
+              >
+                {lang === 'ar' ? 'إلغاء' : 'Annuler'}
+              </button>
+            </div>
           </div>
         </div>
       )}
