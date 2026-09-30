@@ -11,23 +11,45 @@ export interface SyncResult {
 class SyncEngine {
   private currentSyncPromise: Promise<SyncResult> | null = null;
   private queuedSyncPromise: Promise<SyncResult> | null = null;
+  private syncListeners: Set<(result: SyncResult) => void> = new Set();
 
   public isSyncingNow(): boolean {
     return this.currentSyncPromise !== null;
   }
 
+  public onSyncComplete(callback: (result: SyncResult) => void): () => void {
+    this.syncListeners.add(callback);
+    return () => {
+      this.syncListeners.delete(callback);
+    };
+  }
+
+  private notifySyncListeners(result: SyncResult): void {
+    for (const listener of this.syncListeners) {
+      try {
+        listener(result);
+      } catch (e) {
+        console.warn('Sync listener notice:', e);
+      }
+    }
+  }
+
   public async syncAll(): Promise<SyncResult> {
     if (!navigator.onLine) {
-      return { success: false, processed: 0, errors: ['الجهاز غير متصل بالإنترنت حالياً (Mode hors-ligne)'] };
+      const offlineRes = { success: false, processed: 0, errors: ['الجهاز غير متصل بالإنترنت حالياً (Mode hors-ligne)'] };
+      this.notifySyncListeners(offlineRes);
+      return offlineRes;
     }
 
     const supabase = getSupabase();
     if (!supabase || !isSupabaseConfigured()) {
-      return { 
+      const errRes = { 
         success: false, 
         processed: 0, 
         errors: ['يرجى إدخال إعدادات Supabase (Project URL & Anon Key) في الإعدادات أولاً.'] 
       };
+      this.notifySyncListeners(errRes);
+      return errRes;
     }
 
     // If a sync is already running, wait for it or queue one follow-up pass
@@ -48,7 +70,9 @@ class SyncEngine {
 
     this.currentSyncPromise = this.performSync(supabase);
     try {
-      return await this.currentSyncPromise;
+      const res = await this.currentSyncPromise;
+      this.notifySyncListeners(res);
+      return res;
     } finally {
       this.currentSyncPromise = null;
     }
@@ -971,16 +995,23 @@ class SyncEngine {
       // D1. Pull Remote Sales
       try {
         const localSales = db.getSales(bizId);
+        const effectiveBizIds = Array.from(new Set([bizId, init.user?.id, db.getTenantId()].filter(id => id && id !== 'default')));
+
         let salesQuery = supabase
           .from('sales')
           .select('*')
-          .eq('business_id', bizId)
           .order('created_at', { ascending: false });
+
+        if (effectiveBizIds.length > 1) {
+          salesQuery = salesQuery.in('business_id', effectiveBizIds);
+        } else if (effectiveBizIds.length === 1) {
+          salesQuery = salesQuery.eq('business_id', effectiveBizIds[0]);
+        }
 
         if (localSales.length > 0 && lastSyncIso) {
           salesQuery = salesQuery.gt('created_at', lastSyncIso).limit(50);
         } else {
-          salesQuery = salesQuery.limit(100);
+          salesQuery = salesQuery.limit(200);
         }
 
         const { data: remoteSales } = await salesQuery;
@@ -1017,6 +1048,7 @@ class SyncEngine {
           }
           if (toAdd.length > 0) {
             db.set('sales', [...toAdd, ...localSales]);
+            processed += toAdd.length;
           }
         }
       } catch (e) {
@@ -1064,6 +1096,7 @@ class SyncEngine {
           }
           if (toAddExp.length > 0) {
             db.set('expenses', [...toAddExp, ...localExp]);
+            processed += toAddExp.length;
           }
         }
       } catch (e) {
@@ -1110,6 +1143,7 @@ class SyncEngine {
           }
           if (toAddCash.length > 0) {
             db.set('cash_transactions', [...toAddCash, ...localCash]);
+            processed += toAddCash.length;
           }
         }
       } catch (e) {
@@ -1158,6 +1192,7 @@ class SyncEngine {
           }
           if (toAddPay.length > 0) {
             db.set('payments', [...toAddPay, ...localPay]);
+            processed += toAddPay.length;
           }
         }
       } catch (e) {
@@ -1474,6 +1509,80 @@ class SyncEngine {
     }
 
     return { success: true };
+  }
+
+  // Fast direct pull for sales on view entry or manual refresh
+  public async pullSalesDirectly(bizId?: string): Promise<{ success: boolean; count: number }> {
+    const supabase = getSupabase();
+    if (!supabase || !isSupabaseConfigured() || !navigator.onLine) {
+      return { success: false, count: 0 };
+    }
+
+    try {
+      const init = db.initialize();
+      const effectiveBizId = bizId || init.business.id;
+      const effectiveBizIds = Array.from(new Set([effectiveBizId, init.user?.id, db.getTenantId()].filter(id => id && id !== 'default')));
+
+      let salesQuery = supabase
+        .from('sales')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (effectiveBizIds.length > 1) {
+        salesQuery = salesQuery.in('business_id', effectiveBizIds);
+      } else if (effectiveBizIds.length === 1) {
+        salesQuery = salesQuery.eq('business_id', effectiveBizIds[0]);
+      }
+
+      salesQuery = salesQuery.limit(200);
+
+      const { data: remoteSales, error } = await salesQuery;
+      if (error || !remoteSales) return { success: false, count: 0 };
+
+      const localSales = db.getSales(effectiveBizId);
+      const localIds = new Set(localSales.map(s => s.id));
+      const salesTombstones = new Set(db.getTombstones('sales'));
+      const salesPendingDeletes = new Set(db.getDeleteQueue('sales'));
+      const toAdd: any[] = [];
+
+      for (const rs of remoteSales) {
+        if (!localIds.has(rs.id) && !salesTombstones.has(rs.id) && !salesPendingDeletes.has(rs.id)) {
+          toAdd.push({
+            id: rs.id,
+            business_id: rs.business_id,
+            branch_id: rs.branch_id || init.branch.id,
+            invoice_number: rs.invoice_number,
+            customer_id: rs.customer_id,
+            customer_name: rs.customer_name || 'زبون عام',
+            items: rs.items || [],
+            subtotal: Number(rs.subtotal || 0),
+            discount: Number(rs.discount || 0),
+            tax_total: Number(rs.tax_total || 0),
+            total: Number(rs.total || 0),
+            amount_paid: Number(rs.amount_paid || 0),
+            amount_due: Number(rs.amount_due || 0),
+            payment_method: rs.payment_method || 'CASH',
+            status: rs.status || 'COMPLETED',
+            user_name: rs.user_name || 'كاشير',
+            notes: rs.notes,
+            created_at: rs.created_at || new Date().toISOString(),
+          });
+        }
+      }
+
+      if (toAdd.length > 0) {
+        db.set('sales', [...toAdd, ...localSales]);
+        this.notifySyncListeners({
+          success: true,
+          processed: toAdd.length,
+          errors: []
+        });
+      }
+      return { success: true, count: toAdd.length };
+    } catch (e) {
+      console.warn('pullSalesDirectly error:', e);
+      return { success: false, count: 0 };
+    }
   }
 }
 

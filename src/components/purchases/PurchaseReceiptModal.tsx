@@ -4,13 +4,20 @@ import {
   X, 
   Truck,
   MessageCircle,
-  FileText
+  FileText,
+  Bluetooth,
+  Smartphone,
+  HelpCircle,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Purchase, Supplier } from '../../types';
 import { formatMAD } from '../../i18n/locales';
 import { openWhatsApp } from '../../services/whatsapp';
 import { convertNumberToArabicWords, convertNumberToFrenchWords } from '../common/ReceiptModal';
+import { thermalPrinterService } from '../../services/thermalPrinter';
+import { ThermalPrinterGuideModal } from '../common/ThermalPrinterGuideModal';
 
 interface PurchaseReceiptModalProps {
   purchase: Purchase | null;
@@ -27,6 +34,44 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
   const [paperFormat, setPaperFormat] = useState<'A4' | '80mm'>('A4');
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [a4Scale, setA4Scale] = useState(0.45);
+
+  // Bluetooth & Mobile Printing State
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isBtPrinting, setIsBtPrinting] = useState(false);
+  const [btSuccess, setBtSuccess] = useState(false);
+
+  const isAndroid = thermalPrinterService.isAndroid();
+
+  const handleBluetoothPrint = async () => {
+    const printEl = document.getElementById('printable-purchase-receipt');
+    if (!printEl) return;
+
+    setIsBtPrinting(true);
+    setBtSuccess(false);
+    try {
+      const res = await thermalPrinterService.printReceiptViaBluetooth(printEl, '80mm');
+      if (res.success) {
+        setBtSuccess(true);
+        setTimeout(() => setBtSuccess(false), 3000);
+      } else {
+        alert(res.error || (lang === 'ar' ? 'تعذر الاتصال بالطابعة عبر البلوتوث' : 'Erreur de connexion Bluetooth'));
+      }
+    } catch (e: any) {
+      alert(e?.message || (lang === 'ar' ? 'حدث خطأ أثناء الاتصال' : 'Erreur'));
+    } finally {
+      setIsBtPrinting(false);
+    }
+  };
+
+  const handleRawBTPrint = async () => {
+    const printEl = document.getElementById('printable-purchase-receipt');
+    if (!printEl) return;
+    try {
+      await thermalPrinterService.printReceiptViaRawBT(printEl, '80mm');
+    } catch (e: any) {
+      alert(e?.message || 'Erreur RawBT');
+    }
+  };
 
   // Auto-calculate scale on mobile/desktop so the full A4 sheet fits 100% without horizontal scroll or zooming
   useEffect(() => {
@@ -247,30 +292,43 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
           </button>
         </div>
 
-        {/* Paper Format Selector Tabs */}
-        <div className="p-3 bg-slate-100 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex justify-center gap-2 no-print">
-          <button
-            onClick={() => setPaperFormat('A4')}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-              paperFormat === 'A4'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>{lang === 'ar' ? 'ورق قياسي A4 (Facture A4)' : 'Standard A4'}</span>
-          </button>
-          <button
-            onClick={() => setPaperFormat('80mm')}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-              paperFormat === '80mm'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            <Printer className="w-4 h-4" />
-            <span>{lang === 'ar' ? 'وصل حراري 80mm' : 'Thermique 80mm'}</span>
-          </button>
+        {/* Paper Format Selector Tabs & Help */}
+        <div className="p-3 bg-slate-100 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 no-print">
+          <div className="flex items-center gap-2 mx-auto sm:mx-0">
+            <button
+              onClick={() => setPaperFormat('A4')}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                paperFormat === 'A4'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>{lang === 'ar' ? 'ورق قياسي A4 (Facture A4)' : 'Standard A4'}</span>
+            </button>
+            <button
+              onClick={() => setPaperFormat('80mm')}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                paperFormat === '80mm'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <Printer className="w-4 h-4" />
+              <span>{lang === 'ar' ? 'وصل حراري 80mm' : 'Thermique 80mm'}</span>
+            </button>
+          </div>
+
+          {paperFormat !== 'A4' && (
+            <button
+              onClick={() => setIsGuideOpen(true)}
+              className="px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 text-blue-700 dark:text-blue-300 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer mx-auto sm:mx-0"
+              title={lang === 'ar' ? 'دليل ربط الطابعة بالهاتف وحل المشاكل' : 'Guide connexion téléphone'}
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
+              <span>{lang === 'ar' ? 'ربط الطابعة بالهاتف؟' : 'Aide Bluetooth'}</span>
+            </button>
+          )}
         </div>
 
         {/* Printable Container */}
@@ -374,7 +432,10 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                         {business.address} - {business.city}
                       </div>
                       <div className="text-xs text-slate-600 font-mono mt-0.5">
-                        ICE : {business.ice || '002938475000031'} | {lang === 'ar' ? 'الهاتف :' : 'Tél :'} {business.phone}
+                        {[
+                          business.ice?.trim() ? `ICE: ${business.ice.trim()}` : null,
+                          business.phone?.trim() ? `${lang === 'ar' ? 'الهاتف :' : 'Tél :'} ${business.phone.trim()}` : null,
+                        ].filter(Boolean).join(' | ')}
                       </div>
                     </div>
                   </div>
@@ -423,8 +484,8 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                           </span>
                           <span className="text-slate-400 font-mono text-[11px] block mt-1">
                             {lang === 'ar' 
-                              ? `أي ما يعادل: ${formatMAD(purchase.total, 'ar')} (بما فيها جميع الرسوم والضرائب)` 
-                              : `Soit un montant de : ${formatMAD(purchase.total, 'fr')} (Toutes Taxes Comprises)`}
+                              ? `أي ما يعادل: ${formatMAD(purchase.total, 'ar')}${business.taxEnabled ? ' (بما فيها جميع الرسوم والضرائب)' : ''}` 
+                              : `Soit un montant de : ${formatMAD(purchase.total, 'fr')}${business.taxEnabled ? ' (Toutes Taxes Comprises)' : ''}`}
                           </span>
                         </p>
                       </div>
@@ -499,9 +560,11 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                               <text x="100" y="72" textAnchor="middle" fontSize="7" fill="currentColor">
                                 {lang === 'ar' ? 'الهاتف:' : 'Tél:'} {business.phone}
                               </text>
-                              <text x="100" y="83" textAnchor="middle" fontSize="6.5" fill="currentColor">
-                                ICE: {business.ice || '002938475000031'}
-                              </text>
+                              {business.ice?.trim() && (
+                                <text x="100" y="83" textAnchor="middle" fontSize="6.5" fill="currentColor">
+                                  ICE: {business.ice.trim()}
+                                </text>
+                              )}
                             </svg>
                           )}
                         </div>
@@ -519,11 +582,30 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                     </div>
                   )}
                   <p className="font-semibold text-slate-700 uppercase">
-                    {lang === 'ar' ? 'شركة' : 'Société'} {business.name} {business.capital ? `| ${lang === 'ar' ? 'رأس المال :' : 'Capital :'} ${business.capital}` : ''} | {lang === 'ar' ? 'الهاتف :' : 'Tél :'} {business.phone} | {business.address} - {business.city}
+                    {[
+                      business.name ? `${lang === 'ar' ? 'شركة' : 'Société'} ${business.name}` : null,
+                      business.capital?.trim() ? `${lang === 'ar' ? 'رأس المال :' : 'Capital :'} ${business.capital.trim()}` : null,
+                      business.phone?.trim() ? `${lang === 'ar' ? 'الهاتف :' : 'Tél :'} ${business.phone.trim()}` : null,
+                      [business.address?.trim(), business.city?.trim()].filter(Boolean).join(' - ') || null,
+                    ].filter(Boolean).join(' | ')}
                   </p>
-                  <p className="text-[9px] text-slate-500 mt-0.5">
-                    ICE: {business.ice || '002938475000031'} | RC: {business.rc || '173273'} | IF: {business.ifNumber || '68923589'} | TP: {business.patente || '46491839'} {business.bankInfo ? `| RIB : ${business.bankInfo}` : ''}
-                  </p>
+
+                  {/* Legal Identifiers (ONLY display identifiers that user actually entered) */}
+                  {(() => {
+                    const legalItems: string[] = [];
+                    if (business.ice?.trim()) legalItems.push(`ICE: ${business.ice.trim()}`);
+                    if (business.rc?.trim()) legalItems.push(`RC: ${business.rc.trim()}`);
+                    if (business.ifNumber?.trim()) legalItems.push(`IF: ${business.ifNumber.trim()}`);
+                    if (business.patente?.trim()) legalItems.push(`TP: ${business.patente.trim()}`);
+                    if (business.cnss?.trim()) legalItems.push(`CNSS: ${business.cnss.trim()}`);
+                    if (business.bankInfo?.trim()) legalItems.push(`RIB: ${business.bankInfo.trim()}`);
+                    if (legalItems.length === 0) return null;
+                    return (
+                      <p className="text-[9px] text-slate-500 mt-0.5 font-mono">
+                        {legalItems.join(' | ')}
+                      </p>
+                    );
+                  })()}
                   <div className={`flex ${lang === 'ar' ? 'justify-start' : 'justify-end'} text-[9px] text-slate-400 mt-1`}>
                     <span>{lang === 'ar' ? 'صفحة 1/1' : 'Page 1/1'}</span>
                   </div>
@@ -631,27 +713,76 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
           )}
         </div>
 
-        {/* Actions Bar (Print, WhatsApp) */}
-        <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-2 no-print justify-center items-center">
+        {/* Actions Bar (Print, Bluetooth, WhatsApp) */}
+        <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap gap-2 no-print justify-center items-center">
           <button
             onClick={handleShareWhatsApp}
-            className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-[#00a884] hover:bg-[#008f6f] text-white font-extrabold text-xs sm:text-sm shadow-xs transition cursor-pointer active:scale-95"
+            className="flex-1 min-w-[120px] h-11 flex items-center justify-center gap-1.5 rounded-xl bg-[#00a884] hover:bg-[#008f6f] text-white font-extrabold text-xs sm:text-sm shadow-xs transition cursor-pointer active:scale-95"
             title={lang === 'ar' ? 'إرسال عبر واتساب' : 'Envoyer via WhatsApp'}
           >
             <MessageCircle className="w-4 h-4 fill-current shrink-0" />
             <span className="whitespace-nowrap">{lang === 'ar' ? 'إرسال واتساب' : 'WhatsApp'}</span>
           </button>
 
+          {/* Bluetooth Print Button (Available for Thermal 80mm) */}
+          {paperFormat !== 'A4' && (
+            <button
+              onClick={handleBluetoothPrint}
+              disabled={isBtPrinting}
+              className={`flex-1 min-w-[130px] h-11 flex items-center justify-center gap-1.5 rounded-xl font-extrabold text-xs sm:text-sm shadow-xs active:scale-95 transition cursor-pointer disabled:opacity-50 ${
+                btSuccess 
+                  ? 'bg-emerald-600 text-white' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+              title={lang === 'ar' ? 'طباعة مباشرة عبر البلوتوث للهاتف المحمول أو الكمبيوتر' : 'Impression Bluetooth Directe'}
+            >
+              {isBtPrinting ? (
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+              ) : btSuccess ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              ) : (
+                <Bluetooth className="w-4 h-4 shrink-0" />
+              )}
+              <span className="whitespace-nowrap">
+                {isBtPrinting 
+                  ? (lang === 'ar' ? 'جاري الاتصال...' : 'Connexion...') 
+                  : btSuccess 
+                  ? (lang === 'ar' ? 'تمت الطباعة!' : 'Imprimé !')
+                  : (lang === 'ar' ? 'طباعة بلوتوث' : 'Bluetooth')}
+              </span>
+            </button>
+          )}
+
+          {/* RawBT on Android */}
+          {paperFormat !== 'A4' && isAndroid && (
+            <button
+              onClick={handleRawBTPrint}
+              className="h-11 px-3 flex items-center justify-center gap-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs shadow-xs active:scale-95 transition cursor-pointer shrink-0"
+              title={lang === 'ar' ? 'طباعة سريعة عبر تطبيق RawBT للأندرويد' : 'Imprimer via RawBT'}
+            >
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="whitespace-nowrap font-mono text-[11px]">RawBT</span>
+            </button>
+          )}
+
           <button
             onClick={handlePrint}
-            className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-extrabold text-xs sm:text-sm shadow-xs active:scale-95 transition cursor-pointer"
+            className="flex-1 min-w-[120px] h-11 flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-extrabold text-xs sm:text-sm shadow-xs active:scale-95 transition cursor-pointer"
+            title={lang === 'ar' ? 'طباعة عادية عبر نافذة النظام' : 'Impression Standard'}
           >
             <Printer className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">{lang === 'ar' ? 'طباعة الفاتورة' : 'Imprimer'}</span>
+            <span className="whitespace-nowrap">{paperFormat === 'A4' ? (lang === 'ar' ? 'طباعة الفاتورة' : 'Imprimer') : (lang === 'ar' ? 'طباعة عادية' : 'Système')}</span>
           </button>
         </div>
 
       </div>
+
+      {/* Mobile Thermal Printer Guide & Troubleshooter Modal */}
+      <ThermalPrinterGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        lang={lang}
+      />
     </div>
   );
 };

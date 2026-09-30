@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShoppingBag, 
   Search, 
@@ -47,6 +47,58 @@ export const SalesView: React.FC = () => {
 
   const sales = useMemo(() => db.getSales(business.id, branch.id), [business.id, branch.id, dataVersion]);
   const customers = useMemo(() => db.getCustomers(business.id), [business.id, dataVersion]);
+
+  // Sync on mount to immediately load any new or returning sales from cloud
+  const [isInitialSyncing, setIsInitialSyncing] = useState(sales.length === 0);
+
+  const fetchSales = async () => {
+    setIsInitialSyncing(true);
+    try {
+      await syncEngine.pullSalesDirectly(business.id);
+      refreshData();
+    } finally {
+      setIsInitialSyncing(false);
+    }
+    // Also perform full background sync
+    syncEngine.syncAll().then(() => refreshData()).catch(() => {});
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // 1. Immediately trigger fast direct sales pull on mount
+    syncEngine.pullSalesDirectly(business.id).then(() => {
+      if (isMounted) {
+        refreshData();
+        setIsInitialSyncing(false);
+      }
+    }).catch(() => {
+      if (isMounted) setIsInitialSyncing(false);
+    });
+
+    // 2. Also trigger full sync to ensure deletions/returns/debts are reconciled
+    syncEngine.syncAll().then(() => {
+      if (isMounted) {
+        refreshData();
+        setIsInitialSyncing(false);
+      }
+    }).catch(() => {
+      if (isMounted) setIsInitialSyncing(false);
+    });
+
+    // 3. React to any sync completing in background
+    const unsub = syncEngine.onSyncComplete(() => {
+      if (isMounted) {
+        refreshData();
+        setIsInitialSyncing(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsub();
+    };
+  }, [business.id]);
 
   const filteredSales = useMemo(() => {
     return sales.filter(s => 
@@ -199,19 +251,31 @@ export const SalesView: React.FC = () => {
           </span>
         </div>
 
-        {/* Search */}
-        <div className="relative w-full sm:w-72">
-          <Search className={`w-4 h-4 text-slate-400 absolute ${lang === 'ar' ? 'right-3' : 'left-3'} top-3`} />
-          <input
-            type="text"
-            value={search}
-            onChange={e => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            placeholder={lang === 'ar' ? 'بحث برقم الفاتورة أو العميل...' : 'Rechercher par n° ou client...'}
-            className={`w-full ${lang === 'ar' ? 'pr-9 pl-3' : 'pl-9 pr-3'} py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs border border-transparent outline-hidden`}
-          />
+        {/* Search & Actions */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-72">
+            <Search className={`w-4 h-4 text-slate-400 absolute ${lang === 'ar' ? 'right-3' : 'left-3'} top-3`} />
+            <input
+              type="text"
+              value={search}
+              onChange={e => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder={lang === 'ar' ? 'بحث برقم الفاتورة أو العميل...' : 'Rechercher par n° ou client...'}
+              className={`w-full ${lang === 'ar' ? 'pr-9 pl-3' : 'pl-9 pr-3'} py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs border border-transparent outline-hidden`}
+            />
+          </div>
+
+          <button
+            onClick={fetchSales}
+            disabled={isInitialSyncing}
+            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 disabled:opacity-50"
+            title={lang === 'ar' ? 'تحديث الفواتير من السحابة' : 'Actualiser depuis le cloud'}
+          >
+            <RotateCcw className={`w-4 h-4 text-teal-600 ${isInitialSyncing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{lang === 'ar' ? 'تحديث' : 'Actualiser'}</span>
+          </button>
         </div>
       </div>
 
@@ -219,7 +283,16 @@ export const SalesView: React.FC = () => {
       <div className="space-y-3">
         {filteredSales.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-12 text-center text-slate-400 text-xs">
-            {lang === 'ar' ? 'لم يتم العثور على أي فواتير بيع' : 'Aucune facture de vente trouvée'}
+            {isInitialSyncing ? (
+              <div className="flex flex-col items-center justify-center gap-2 text-teal-600 dark:text-teal-400 py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-teal-600" />
+                <span className="font-bold text-slate-700 dark:text-slate-200">
+                  {lang === 'ar' ? 'جاري مزامنة وتحديث سجل المبيعات...' : 'Synchronisation des ventes en cours...'}
+                </span>
+              </div>
+            ) : (
+              lang === 'ar' ? 'لم يتم العثور على أي فواتير بيع' : 'Aucune facture de vente trouvée'
+            )}
           </div>
         ) : (
           paginatedSales.map(sale => (

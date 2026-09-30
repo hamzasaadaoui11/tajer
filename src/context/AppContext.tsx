@@ -211,6 +211,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [dataVersion, setDataVersion] = useState<number>(1);
 
+  // Reactive listener: whenever syncEngine pushes or pulls data, automatically bump dataVersion across all views
+  useEffect(() => {
+    const unsub = syncEngine.onSyncComplete(res => {
+      setDataVersion(v => v + 1);
+    });
+    return unsub;
+  }, []);
+
   // Helper to check onboarding across local device AND cloud (Supabase metadata and businesses table)
   const resolveOnboardingStatusAndRestore = async (
     userId: string,
@@ -351,6 +359,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 setIsOnboardingComplete(res.completed);
                 setIsAuthenticated(true);
                 setIsAuthChecking(false);
+                // Immediately sync all remote data to local storage and update views
+                syncEngine.syncAll().then(syncRes => {
+                  if (syncRes.success || syncRes.processed > 0) {
+                    setDataVersion(v => v + 1);
+                  }
+                }).catch(() => {});
                 return;
               }
             }
@@ -392,6 +406,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           db.cleanupDemoContacts(res.restoredBusiness?.id || tenantInit.business.id);
           setIsOnboardingComplete(res.completed);
           setIsAuthenticated(true);
+          syncEngine.syncAll().then(syncRes => {
+            if (syncRes.success || syncRes.processed > 0) {
+              setDataVersion(v => v + 1);
+            }
+          }).catch(() => {});
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
           setAuthEmail('');
@@ -456,6 +475,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsOnboardingComplete(res.completed);
         setIsAuthenticated(true);
         setCurrentView('dashboard');
+        // Immediately sync all data on login so all views (including sales history) are instantly populated
+        syncEngine.syncAll().then(syncRes => {
+          if (syncRes.success || syncRes.processed > 0) {
+            setDataVersion(v => v + 1);
+          }
+        }).catch(() => {});
         return { success: true };
       }
 
@@ -615,7 +640,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     db.cleanupDemoContacts(business.id);
     syncEngine.syncAll().then(res => {
       db.cleanupDemoContacts(business.id);
-      if (res.success) setDataVersion(v => v + 1);
+      if (res.success || res.processed > 0) setDataVersion(v => v + 1);
     }).catch(() => {});
 
     // 2. Gentle safety sync every 5 minutes (reduced from aggressive 10s to prevent Supabase Egress spike)

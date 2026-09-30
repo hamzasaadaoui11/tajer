@@ -276,10 +276,10 @@ class LocalDatabase {
         phone: '06 61 00 11 22',
         address: 'شارع الحسن الثاني',
         city: 'الدار البيضاء',
-        ice: '002938475000031',
-        ifNumber: '40192837',
-        rc: '120456',
-        patente: '340912',
+        ice: '',
+        ifNumber: '',
+        rc: '',
+        patente: '',
         taxEnabled: true,
         defaultTaxRate: 20,
         receiptFooter: 'شكراً لزيارتكم! البضاعة المباعة ترد أو تستبدل خلال 48 ساعة مع الفاتورة',
@@ -912,17 +912,42 @@ class LocalDatabase {
   }
 
   // --- Sales Execution (Transactions) ---
-  public getSales(businessId: string, branchId?: string): Sale[] {
-    const all = this.get<Sale>('sales').filter(s => !s.business_id || s.business_id === businessId);
+  public getSales(businessId?: string, branchId?: string): Sale[] {
+    const raw = this.get<Sale>('sales');
+    const tenantId = this.getTenantId();
+    const effectiveBizId = businessId || (tenantId !== 'default' ? tenantId : '');
+
+    const validIds = new Set<string>();
+    if (effectiveBizId) validIds.add(effectiveBizId);
+    if (tenantId && tenantId !== 'default') {
+      validIds.add(tenantId);
+      validIds.add(`biz-${tenantId.substring(0, 8)}`);
+    }
+
+    let all = raw.filter(s => {
+      if (!s.business_id) return true;
+      if (validIds.size === 0) return true;
+      if (validIds.has(s.business_id)) return true;
+      if (tenantId && tenantId !== 'default' && s.business_id.includes(tenantId.substring(0, 8))) return true;
+      return false;
+    });
+
+    // Fallback: If tenant-scoped store has sales but strict ID filtering matched none, keep all raw sales
+    if (all.length === 0 && raw.length > 0) {
+      all = raw;
+    }
+
     let healed = false;
-    for (const s of all) {
-      if (!s.business_id) {
-        s.business_id = businessId;
-        healed = true;
+    if (effectiveBizId) {
+      for (const s of all) {
+        if (!s.business_id) {
+          s.business_id = effectiveBizId;
+          healed = true;
+        }
       }
     }
     if (healed) {
-      this.set('sales', all);
+      this.set('sales', raw);
     }
     return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }

@@ -6,11 +6,17 @@ import {
   CheckCircle2, 
   Copy,
   Receipt,
-  MessageCircle
+  MessageCircle,
+  Bluetooth,
+  Smartphone,
+  HelpCircle,
+  Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatMAD } from '../../i18n/locales';
 import { generateSaleWhatsAppText, openWhatsApp } from '../../services/whatsapp';
+import { thermalPrinterService } from '../../services/thermalPrinter';
+import { ThermalPrinterGuideModal } from './ThermalPrinterGuideModal';
 
 // Arabic number to words converter for Moroccan Dirhams (MAD)
 export function convertNumberToArabicWords(amount: number): string {
@@ -203,6 +209,51 @@ export const ReceiptModal: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [a4Scale, setA4Scale] = useState(0.45);
+
+  // Mobile & Bluetooth Printing State
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isBtPrinting, setIsBtPrinting] = useState(false);
+  const [btSuccess, setBtSuccess] = useState(false);
+
+  const isMobile = thermalPrinterService.isMobile();
+  const isAndroid = thermalPrinterService.isAndroid();
+
+  const handleBluetoothPrint = async () => {
+    const printEl = document.getElementById('printable-receipt');
+    if (!printEl) return;
+
+    setIsBtPrinting(true);
+    setBtSuccess(false);
+    try {
+      const res = await thermalPrinterService.printReceiptViaBluetooth(
+        printEl,
+        paperFormat === '58mm' ? '58mm' : '80mm'
+      );
+      if (res.success) {
+        setBtSuccess(true);
+        setTimeout(() => setBtSuccess(false), 3000);
+      } else {
+        alert(res.error || (lang === 'ar' ? 'تعذر الاتصال بالطابعة عبر البلوتوث' : 'Erreur de connexion Bluetooth'));
+      }
+    } catch (e: any) {
+      alert(e?.message || (lang === 'ar' ? 'حدث خطأ أثناء الاتصال' : 'Erreur'));
+    } finally {
+      setIsBtPrinting(false);
+    }
+  };
+
+  const handleRawBTPrint = async () => {
+    const printEl = document.getElementById('printable-receipt');
+    if (!printEl) return;
+    try {
+      await thermalPrinterService.printReceiptViaRawBT(
+        printEl,
+        paperFormat === '58mm' ? '58mm' : '80mm'
+      );
+    } catch (e: any) {
+      alert(e?.message || 'Erreur RawBT');
+    }
+  };
 
   // Auto-calculate scale on mobile/desktop so the full A4 sheet fits 100% without horizontal scroll or zooming
   useEffect(() => {
@@ -418,38 +469,52 @@ export const ReceiptModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Paper Format Selector Tabs */}
-        <div className="p-3 bg-slate-100 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex justify-center gap-1.5 no-print">
-          <button
-            onClick={() => setPaperFormat('80mm')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-              paperFormat === '80mm'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            {lang === 'ar' ? 'حراري 80mm' : 'Thermique 80mm'}
-          </button>
-          <button
-            onClick={() => setPaperFormat('58mm')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-              paperFormat === '58mm'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            {lang === 'ar' ? 'حراري 58mm (محمول)' : 'Thermique 58mm (portable)'}
-          </button>
-          <button
-            onClick={() => setPaperFormat('A4')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-              paperFormat === 'A4'
-                ? 'bg-red-600 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            {lang === 'ar' ? 'ورق قياسي A4' : 'Standard A4'}
-          </button>
+        {/* Paper Format Selector Tabs & Mobile Helper */}
+        <div className="p-3 bg-slate-100 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-1.5 no-print">
+          <div className="flex items-center gap-1.5 mx-auto sm:mx-0">
+            <button
+              onClick={() => setPaperFormat('80mm')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                paperFormat === '80mm'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              {lang === 'ar' ? 'حراري 80mm' : 'Thermique 80mm'}
+            </button>
+            <button
+              onClick={() => setPaperFormat('58mm')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                paperFormat === '58mm'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              {lang === 'ar' ? 'حراري 58mm (محمول)' : 'Thermique 58mm (portable)'}
+            </button>
+            <button
+              onClick={() => setPaperFormat('A4')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                paperFormat === 'A4'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              {lang === 'ar' ? 'ورق قياسي A4' : 'Standard A4'}
+            </button>
+          </div>
+
+          {/* Quick Phone Printer Help Button */}
+          {paperFormat !== 'A4' && (
+            <button
+              onClick={() => setIsGuideOpen(true)}
+              className="px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 text-blue-700 dark:text-blue-300 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer mx-auto sm:mx-0"
+              title={lang === 'ar' ? 'دليل ربط الطابعة بالهاتف وحل المشاكل' : 'Guide connexion téléphone'}
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
+              <span>{lang === 'ar' ? 'ربط الطابعة بالهاتف؟' : 'Aide Bluetooth'}</span>
+            </button>
+          )}
         </div>
 
         {/* The Printable Invoice Container */}
@@ -560,8 +625,8 @@ export const ReceiptModal: React.FC = () => {
                         </span>
                         <span className="text-slate-400 font-mono text-[11px] block mt-1">
                           {lang === 'ar' 
-                            ? `أي ما يعادل: ${formatMAD(activeSaleReceipt.total, 'ar')} (بما فيها جميع الرسوم والضرائب)` 
-                            : `Soit un montant de : ${formatMAD(activeSaleReceipt.total, 'fr')} (Toutes Taxes Comprises)`}
+                            ? `أي ما يعادل: ${formatMAD(activeSaleReceipt.total, 'ar')}${business.taxEnabled ? ' (بما فيها جميع الرسوم والضرائب)' : ''}` 
+                            : `Soit un montant de : ${formatMAD(activeSaleReceipt.total, 'fr')}${business.taxEnabled ? ' (Toutes Taxes Comprises)' : ''}`}
                         </span>
                       </p>
                     </div>
@@ -569,17 +634,33 @@ export const ReceiptModal: React.FC = () => {
                     {/* Totals Breakdown */}
                     <div className="w-64 space-y-2 text-xs">
                       <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-600 font-semibold">{lang === 'ar' ? 'المجموع الفرعي (HT)' : 'Sous-total (HT)'}</span>
+                        <span className="text-slate-600 font-semibold">
+                          {business.taxEnabled 
+                            ? (lang === 'ar' ? 'المجموع الفرعي (HT)' : 'Sous-total (HT)')
+                            : (lang === 'ar' ? 'المجموع الفرعي :' : 'Sous-total :')}
+                        </span>
                         <span className="font-mono font-bold text-slate-800">{formatMAD(activeSaleReceipt.subtotal, lang)}</span>
                       </div>
-                      <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-600 font-semibold">{lang === 'ar' ? 'الضريبة' : 'TVA'} (TVA {business.defaultTaxRate ?? 20}%)</span>
-                        <span className="font-mono font-bold text-slate-800">
-                          {formatMAD(activeSaleReceipt.tax_total || (activeSaleReceipt.subtotal * ((business.defaultTaxRate ?? 20) / 100)), lang)}
-                        </span>
-                      </div>
+                      {activeSaleReceipt.discount > 0 && (
+                        <div className="flex justify-between py-1 border-b border-slate-100 text-emerald-700">
+                          <span className="font-semibold">{lang === 'ar' ? 'الخصم المطبق :' : 'Remise :'}</span>
+                          <span className="font-mono font-bold">-{formatMAD(activeSaleReceipt.discount, lang)}</span>
+                        </div>
+                      )}
+                      {business.taxEnabled && (
+                        <div className="flex justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-600 font-semibold">{lang === 'ar' ? 'الضريبة' : 'TVA'} (TVA {business.defaultTaxRate ?? 20}%)</span>
+                          <span className="font-mono font-bold text-slate-800">
+                            {formatMAD(activeSaleReceipt.tax_total || 0, lang)}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between py-2 text-sm font-black text-slate-900 border-t border-slate-300">
-                        <span>{lang === 'ar' ? 'الإجمالي الصافي (TTC)' : 'Total Net (TTC)'}</span>
+                        <span>
+                          {business.taxEnabled 
+                            ? (lang === 'ar' ? 'الإجمالي الصافي (TTC)' : 'Total Net (TTC)')
+                            : (lang === 'ar' ? 'المجموع الإجمالي الصافي :' : 'Total Net :')}
+                        </span>
                         <span style={{ color: business.invoiceColor || '#C02626' }} className="font-mono text-base font-bold">{formatMAD(activeSaleReceipt.total, lang)}</span>
                       </div>
                     </div>
@@ -610,9 +691,11 @@ export const ReceiptModal: React.FC = () => {
                                 <text x="100" y="70" textAnchor="middle" fontSize="7" fill="currentColor">
                                   {lang === 'ar' ? 'هاتف : ' : 'Tél : '}{business.phone}
                                 </text>
-                                <text x="100" y="81" textAnchor="middle" fontSize="6.5" fill="currentColor">
-                                  ICE: {business.ice || '002938475000031'}
-                                </text>
+                                {business.ice?.trim() && (
+                                  <text x="100" y="81" textAnchor="middle" fontSize="6.5" fill="currentColor">
+                                    ICE: {business.ice.trim()}
+                                  </text>
+                                )}
                                 <path
                                   d="M 40 85 C 60 40, 80 90, 110 50 C 130 30, 150 70, 175 45 C 190 35, 170 85, 140 75 C 100 65, 80 85, 55 95"
                                   fill="none"
@@ -638,11 +721,31 @@ export const ReceiptModal: React.FC = () => {
                     </div>
                   )}
                   <p className="font-semibold text-slate-700">
-                    {lang === 'ar' ? 'شركة' : 'Société'} {business.name} {business.capital ? `| ${lang === 'ar' ? 'رأس المال :' : 'Capital :'} ${business.capital}` : ''} | {lang === 'ar' ? 'الهاتف :' : 'Tél :'} {business.phone} | {business.address} - {business.city}
+                    {[
+                      business.name ? `${lang === 'ar' ? 'شركة' : 'Société'} ${business.name}` : null,
+                      business.capital?.trim() ? `${lang === 'ar' ? 'رأس المال :' : 'Capital :'} ${business.capital.trim()}` : null,
+                      business.phone?.trim() ? `${lang === 'ar' ? 'الهاتف :' : 'Tél :'} ${business.phone.trim()}` : null,
+                      [business.address?.trim(), business.city?.trim()].filter(Boolean).join(' - ') || null,
+                    ].filter(Boolean).join(' | ')}
                   </p>
-                  <p className="text-[9px] text-slate-500 mt-0.5">
-                    ICE: {business.ice || '002938475000031'} | RC: {business.rc || '173273'} | IF: {business.ifNumber || '68923589'} | TP: {business.patente || '46491839'} {business.bankInfo ? `| RIB : ${business.bankInfo}` : ''}
-                  </p>
+
+                  {/* Legal Identifiers (ONLY display identifiers that user actually entered) */}
+                  {(() => {
+                    const legalItems: string[] = [];
+                    if (business.ice?.trim()) legalItems.push(`ICE: ${business.ice.trim()}`);
+                    if (business.rc?.trim()) legalItems.push(`RC: ${business.rc.trim()}`);
+                    if (business.ifNumber?.trim()) legalItems.push(`IF: ${business.ifNumber.trim()}`);
+                    if (business.patente?.trim()) legalItems.push(`TP: ${business.patente.trim()}`);
+                    if (business.cnss?.trim()) legalItems.push(`CNSS: ${business.cnss.trim()}`);
+                    if (business.bankInfo?.trim()) legalItems.push(`RIB: ${business.bankInfo.trim()}`);
+                    if (legalItems.length === 0) return null;
+                    return (
+                      <p className="text-[9px] text-slate-500 mt-0.5 font-mono">
+                        {legalItems.join(' | ')}
+                      </p>
+                    );
+                  })()}
+
                   <div className={`flex ${lang === 'ar' ? 'justify-start' : 'justify-end'} text-[9px] text-slate-400 mt-1`}>
                     <span>{lang === 'ar' ? 'صفحة 1/1' : 'Page 1/1'}</span>
                   </div>
@@ -669,11 +772,21 @@ export const ReceiptModal: React.FC = () => {
                 <div className="text-[11px] mt-0.5">{business.address} - {business.city}</div>
                 <div className="text-[11px] font-bold mt-0.5">{lang === 'ar' ? 'الهاتف:' : 'Tél:'} {business.phone}</div>
                 
-                {/* Moroccan Fiscal Identification */}
+                {/* Moroccan Fiscal Identification (clean without defaults) */}
                 <div className="text-[10px] text-slate-500 mt-1 space-y-0.2">
-                  {business.ice && <div>ICE: {business.ice}</div>}
-                  {business.ifNumber && <div>IF: {business.ifNumber} | RC: {business.rc || '-'}</div>}
-                  {business.patente && <div>Patente: {business.patente}</div>}
+                  {business.ice?.trim() && <div>ICE: {business.ice.trim()}</div>}
+                  {[
+                    business.ifNumber?.trim() ? `IF: ${business.ifNumber.trim()}` : null, 
+                    business.rc?.trim() ? `RC: ${business.rc.trim()}` : null
+                  ].filter(Boolean).length > 0 && (
+                    <div>
+                      {[
+                        business.ifNumber?.trim() ? `IF: ${business.ifNumber.trim()}` : null, 
+                        business.rc?.trim() ? `RC: ${business.rc.trim()}` : null
+                      ].filter(Boolean).join(' | ')}
+                    </div>
+                  )}
+                  {business.patente?.trim() && <div>Patente: {business.patente.trim()}</div>}
                 </div>
               </div>
 
@@ -785,27 +898,76 @@ export const ReceiptModal: React.FC = () => {
           )}
         </div>
 
-        {/* Actions Bar (Print, WhatsApp) */}
-        <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-2 no-print justify-center items-center">
+        {/* Actions Bar (Print, Bluetooth, WhatsApp) */}
+        <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap gap-2 no-print justify-center items-center">
           <button
             onClick={handleWhatsApp}
-            className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-[#00a884] hover:bg-[#008f6f] text-white font-extrabold text-xs sm:text-sm shadow-xs transition cursor-pointer active:scale-95"
+            className="flex-1 min-w-[120px] h-11 flex items-center justify-center gap-1.5 rounded-xl bg-[#00a884] hover:bg-[#008f6f] text-white font-extrabold text-xs sm:text-sm shadow-xs transition cursor-pointer active:scale-95"
             title={lang === 'ar' ? 'إرسال عبر واتساب' : 'Envoyer via WhatsApp'}
           >
             <MessageCircle className="w-4 h-4 fill-current shrink-0" />
             <span className="whitespace-nowrap">{lang === 'ar' ? 'إرسال واتساب' : 'WhatsApp'}</span>
           </button>
 
+          {/* Bluetooth Direct Thermal Print Button (Available for 58mm & 80mm) */}
+          {paperFormat !== 'A4' && (
+            <button
+              onClick={handleBluetoothPrint}
+              disabled={isBtPrinting}
+              className={`flex-1 min-w-[130px] h-11 flex items-center justify-center gap-1.5 rounded-xl font-extrabold text-xs sm:text-sm shadow-xs active:scale-95 transition cursor-pointer disabled:opacity-50 ${
+                btSuccess 
+                  ? 'bg-emerald-600 text-white' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+              title={lang === 'ar' ? 'طباعة مباشرة عبر البلوتوث للهاتف المحمول أو الكمبيوتر' : 'Impression Bluetooth Directe'}
+            >
+              {isBtPrinting ? (
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+              ) : btSuccess ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              ) : (
+                <Bluetooth className="w-4 h-4 shrink-0" />
+              )}
+              <span className="whitespace-nowrap">
+                {isBtPrinting 
+                  ? (lang === 'ar' ? 'جاري الاتصال...' : 'Connexion...') 
+                  : btSuccess 
+                  ? (lang === 'ar' ? 'تمت الطباعة!' : 'Imprimé !')
+                  : (lang === 'ar' ? 'طباعة بلوتوث' : 'Bluetooth')}
+              </span>
+            </button>
+          )}
+
+          {/* RawBT Quick Print on Android */}
+          {paperFormat !== 'A4' && isAndroid && (
+            <button
+              onClick={handleRawBTPrint}
+              className="h-11 px-3 flex items-center justify-center gap-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs shadow-xs active:scale-95 transition cursor-pointer shrink-0"
+              title={lang === 'ar' ? 'طباعة سريعة عبر تطبيق RawBT للأندرويد' : 'Imprimer via RawBT'}
+            >
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="whitespace-nowrap font-mono text-[11px]">RawBT</span>
+            </button>
+          )}
+
           <button
             onClick={handlePrint}
-            className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-extrabold text-xs sm:text-sm shadow-xs active:scale-95 transition cursor-pointer"
+            className="flex-1 min-w-[120px] h-11 flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-extrabold text-xs sm:text-sm shadow-xs active:scale-95 transition cursor-pointer"
+            title={lang === 'ar' ? 'طباعة عادية عبر نافذة النظام' : 'Impression Standard'}
           >
             <Printer className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">{lang === 'ar' ? 'طباعة الفاتورة' : 'Imprimer'}</span>
+            <span className="whitespace-nowrap">{paperFormat === 'A4' ? (lang === 'ar' ? 'طباعة الفاتورة' : 'Imprimer') : (lang === 'ar' ? 'طباعة عادية' : 'Système')}</span>
           </button>
         </div>
 
       </div>
+
+      {/* Mobile Thermal Printer Guide & Troubleshooter Modal */}
+      <ThermalPrinterGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        lang={lang}
+      />
     </div>
   );
 };

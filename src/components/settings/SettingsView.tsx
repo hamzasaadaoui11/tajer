@@ -20,11 +20,16 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
-  UserCheck
+  UserCheck,
+  Printer,
+  Bluetooth,
+  HelpCircle
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
 import { Category } from '../../types';
+import { thermalPrinterService } from '../../services/thermalPrinter';
+import { ThermalPrinterGuideModal } from '../common/ThermalPrinterGuideModal';
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -56,6 +61,39 @@ export const SettingsView: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+
+  // Printer Test State
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isTestingPrinter, setIsTestingPrinter] = useState(false);
+  const [printerTestMsg, setPrinterTestMsg] = useState<{ success?: boolean; text?: string } | null>(null);
+  const [savedPrinter, setSavedPrinter] = useState(thermalPrinterService.getSavedPrinterName());
+
+  const handleTestPrinter = async () => {
+    setIsTestingPrinter(true);
+    setPrinterTestMsg(null);
+    try {
+      const res = await thermalPrinterService.printTestTicket(lang);
+      if (res.success) {
+        setSavedPrinter(thermalPrinterService.getSavedPrinterName());
+        setPrinterTestMsg({
+          success: true,
+          text: lang === 'ar' ? 'تمت طباعة التذكرة بنجاح عبر البلوتوث!' : 'Ticket test imprimé avec succès via Bluetooth !'
+        });
+      } else {
+        setPrinterTestMsg({
+          success: false,
+          text: res.error || (lang === 'ar' ? 'تعذر الاتصال بالطابعة' : 'Échec de connexion')
+        });
+      }
+    } catch (e: any) {
+      setPrinterTestMsg({
+        success: false,
+        text: e?.message || 'Erreur'
+      });
+    } finally {
+      setIsTestingPrinter(false);
+    }
+  };
 
   // New Categories State
   const [newCatName, setNewCatName] = useState('');
@@ -994,6 +1032,82 @@ export const SettingsView: React.FC = () => {
               </span>
             </button>
           </div>
+
+          {/* Thermal & Bluetooth Printer Section */}
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Printer className="w-4 h-4 text-teal-600" />
+                <span>{lang === 'ar' ? 'الطابعة الحرارية والبلوتوث (الهاتف والكمبيوتر)' : 'Imprimante Thermique & Bluetooth'}</span>
+              </h4>
+              <button
+                onClick={() => setIsGuideOpen(true)}
+                className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>{lang === 'ar' ? 'دليل ربط الهاتف' : 'Guide mobile'}</span>
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              {lang === 'ar'
+                ? 'يمكنك ربط طابعات البلوتوث الحرارية المحمولة (58mm أو 80mm) بهاتفك الذكي أو حاسوبك وطباعة الفواتير مباشرة مع دعم كامل للخط العربي.'
+                : 'Connectez directement vos imprimantes thermiques Bluetooth (58mm ou 80mm) et imprimez vos tickets.'}
+            </p>
+
+            {savedPrinter && (
+              <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <Bluetooth className="w-4 h-4 text-teal-600" />
+                  <span className="font-bold text-teal-900 dark:text-teal-200">{savedPrinter}</span>
+                </div>
+                <span className="text-[10px] text-teal-700 dark:text-teal-300 font-medium">
+                  {lang === 'ar' ? 'طابعة مقترنة ومحفوظة' : 'Imprimante mémorisée'}
+                </span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleTestPrinter}
+                disabled={isTestingPrinter}
+                className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {isTestingPrinter ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>{lang === 'ar' ? 'جاري الاتصال والطباعة...' : 'Impression en cours...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Bluetooth className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{lang === 'ar' ? 'اختبار اتصال البلوتوث وطباعة تذكرة تجريبية' : 'Tester la connexion Bluetooth'}</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsGuideOpen(true)}
+                className="py-2.5 px-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
+                <span>{lang === 'ar' ? 'كيفية ربط الطابعة بهاتف محمول' : 'Comment connecter au smartphone'}</span>
+              </button>
+            </div>
+
+            {printerTestMsg && (
+              <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                printerTestMsg.success 
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200' 
+                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 border border-rose-200'
+              }`}>
+                {printerTestMsg.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />}
+                <span>{printerTestMsg.text}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1314,6 +1428,13 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Mobile Thermal Printer Guide & Troubleshooter Modal */}
+      <ThermalPrinterGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        lang={lang}
+      />
 
     </div>
   );
