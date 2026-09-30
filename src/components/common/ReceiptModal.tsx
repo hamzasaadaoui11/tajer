@@ -359,10 +359,14 @@ export const ReceiptModal: React.FC = () => {
         cloned.style.justifyContent = 'space-between';
         cloned.style.background = '#ffffff';
       } else {
-        cloned.style.width = paperFormat === '58mm' ? '58mm' : '80mm';
-        cloned.style.maxWidth = paperFormat === '58mm' ? '58mm' : '80mm';
+        const widthVal = paperFormat === '58mm' ? '58mm' : '80mm';
+        cloned.style.width = widthVal;
+        cloned.style.maxWidth = widthVal;
         cloned.style.minHeight = 'auto';
+        cloned.style.height = 'auto';
         cloned.style.padding = paperFormat === '80mm' ? '4mm' : '3mm';
+        cloned.style.display = 'block';
+        cloned.style.background = '#ffffff';
       }
 
       const newWin = window.open('', '_blank');
@@ -448,9 +452,9 @@ export const ReceiptModal: React.FC = () => {
           min-height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
           height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
           padding: ${paperFormat === 'A4' ? '14mm 16mm' : paperFormat === '80mm' ? '4mm' : '3mm'} !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-between !important;
+          display: ${paperFormat === 'A4' ? 'flex' : 'block'} !important;
+          flex-direction: ${paperFormat === 'A4' ? 'column' : 'initial'} !important;
+          justify-content: ${paperFormat === 'A4' ? 'space-between' : 'initial'} !important;
           box-shadow: none !important;
           border: none !important;
           margin: 0 auto !important;
@@ -513,9 +517,10 @@ export const ReceiptModal: React.FC = () => {
           padding: ${paperFormat === 'A4' ? '14mm 16mm' : paperFormat === '80mm' ? '4mm' : '3mm'} !important;
           width: ${paperFormat === 'A4' ? '210mm' : paperFormat === '80mm' ? '80mm' : '58mm'} !important;
           min-height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-between !important;
+          height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
+          display: ${paperFormat === 'A4' ? 'flex' : 'block'} !important;
+          flex-direction: ${paperFormat === 'A4' ? 'column' : 'initial'} !important;
+          justify-content: ${paperFormat === 'A4' ? 'space-between' : 'initial'} !important;
           box-sizing: border-box !important;
         }
       }

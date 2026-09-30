@@ -259,9 +259,9 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
           min-height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
           height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
           padding: ${paperFormat === 'A4' ? '14mm 16mm' : '4mm'} !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-between !important;
+          display: ${paperFormat === 'A4' ? 'flex' : 'block'} !important;
+          flex-direction: ${paperFormat === 'A4' ? 'column' : 'initial'} !important;
+          justify-content: ${paperFormat === 'A4' ? 'space-between' : 'initial'} !important;
           box-shadow: none !important;
           border: none !important;
           margin: 0 auto !important;
@@ -324,9 +324,10 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
           padding: ${paperFormat === 'A4' ? '14mm 16mm' : '4mm'} !important;
           width: ${paperFormat === 'A4' ? '210mm' : '80mm'} !important;
           min-height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-between !important;
+          height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
+          display: ${paperFormat === 'A4' ? 'flex' : 'block'} !important;
+          flex-direction: ${paperFormat === 'A4' ? 'column' : 'initial'} !important;
+          justify-content: ${paperFormat === 'A4' ? 'space-between' : 'initial'} !important;
           box-sizing: border-box !important;
         }
       }
