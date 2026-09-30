@@ -7,6 +7,8 @@
  * 3. High-Fidelity ESC/POS Raster Bit-Image rendering for flawless Arabic calligraphy
  */
 
+import html2canvas from 'html2canvas';
+
 // Common Bluetooth Printer GATT Services & Characteristics
 const PRINTER_SERVICES = [
   '000018f0-0000-1000-8000-00805f9b34fb', // Standard ESC/POS Service
@@ -338,7 +340,7 @@ export class ThermalPrinterService {
   }
 
   /**
-   * Convert DOM Element to high resolution Canvas
+   * Convert DOM Element to high resolution Canvas using html2canvas
    */
   public async renderElementToCanvas(
     element: HTMLElement, 
@@ -360,52 +362,32 @@ export class ThermalPrinterService {
     clone.style.border = 'none';
     document.body.appendChild(clone);
 
-    // Wait for fonts and layouts
-    await new Promise(r => setTimeout(r, 120));
-
-    const totalHeight = Math.max(clone.offsetHeight, clone.scrollHeight) || 600;
-
-    // Use SVG foreignObject technique to convert DOM into Canvas without external heavy dependencies
-    const canvas = document.createElement('canvas');
-    canvas.width = targetWidth;
-    canvas.height = totalHeight;
-    const ctx = canvas.getContext('2d')!;
-
-    // Fill white
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, targetWidth, totalHeight);
-
     try {
-      const clonedHtml = clone.outerHTML;
-      const dataUri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="${targetWidth}" height="${totalHeight}">
-          <foreignObject width="100%" height="100%">
-            <div xmlns="http://www.w3.org/1999/xhtml" style="background:#ffffff;color:#000000;font-family:'Cairo',sans-serif;width:${targetWidth}px;">
-              ${clonedHtml}
-            </div>
-          </foreignObject>
-        </svg>
-      `);
-
-      const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Canvas image load failed'));
-        img.src = dataUri;
+      const canvas = await html2canvas(clone, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: targetWidth,
+        windowWidth: targetWidth,
       });
-
-      ctx.drawImage(img, 0, 0);
-    } catch {
-      // Fallback: draw directly with Canvas 2D
+      return canvas;
+    } catch (e) {
+      console.error('html2canvas render error:', e);
+      const fallbackCanvas = document.createElement('canvas');
+      fallbackCanvas.width = targetWidth;
+      fallbackCanvas.height = 300;
+      const ctx = fallbackCanvas.getContext('2d')!;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, targetWidth, 300);
       ctx.fillStyle = '#000000';
-      ctx.font = 'bold 20px Cairo, sans-serif';
+      ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('تطبيق تاجر - فاتورة مبيعات', targetWidth / 2, 50);
+      return fallbackCanvas;
     } finally {
       document.body.removeChild(clone);
     }
-
-    return canvas;
   }
 
   /**
