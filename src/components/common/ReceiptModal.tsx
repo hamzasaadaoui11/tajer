@@ -346,12 +346,18 @@ export const ReceiptModal: React.FC = () => {
       cloned.style.boxShadow = 'none';
       cloned.style.border = 'none';
       cloned.style.margin = '0 auto';
+      cloned.style.boxSizing = 'border-box';
 
       if (paperFormat === 'A4') {
-        cloned.style.width = '100%';
-        cloned.style.maxWidth = '100%';
-        cloned.style.minHeight = 'auto';
-        cloned.style.padding = '0';
+        cloned.style.width = '210mm';
+        cloned.style.maxWidth = '210mm';
+        cloned.style.minHeight = '297mm';
+        cloned.style.height = '297mm';
+        cloned.style.padding = '14mm 16mm';
+        cloned.style.display = 'flex';
+        cloned.style.flexDirection = 'column';
+        cloned.style.justifyContent = 'space-between';
+        cloned.style.background = '#ffffff';
       } else {
         cloned.style.width = paperFormat === '58mm' ? '58mm' : '80mm';
         cloned.style.maxWidth = paperFormat === '58mm' ? '58mm' : '80mm';
@@ -371,7 +377,27 @@ export const ReceiptModal: React.FC = () => {
         return;
       }
 
-      const headStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      // Extract all compiled rules from document.styleSheets
+      let allCssRules = '';
+      try {
+        for (const sheet of Array.from(document.styleSheets)) {
+          try {
+            if (sheet.cssRules) {
+              for (const rule of Array.from(sheet.cssRules)) {
+                allCssRules += rule.cssText + '\n';
+              }
+            }
+          } catch (e) {
+            if (sheet.href) {
+              allCssRules += `@import url("${sheet.href}");\n`;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Could not extract styleSheets', e);
+      }
+
+      const headTags = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
         .map(el => el.outerHTML)
         .join('\n');
 
@@ -384,74 +410,74 @@ export const ReceiptModal: React.FC = () => {
     <title>${lang === 'ar' ? 'طباعة فاتورة رقم' : 'Impression Facture N°'} ${activeSaleReceipt.invoice_number}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Cairo', 'sans-serif'],
-            }
-          }
-        }
-      }
-    </script>
-    ${headStyles}
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    ${headTags}
+    <style>
+      ${allCssRules}
+    </style>
     <style>
       * {
         box-sizing: border-box !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+        color-adjust: exact !important;
       }
       html, body {
         margin: 0 !important;
         padding: 0 !important;
         background: #ffffff !important;
-        color: #0f172a !important;
-        font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important;
+        font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
       }
       @page {
-        size: ${paperFormat === '58mm' ? '58mm auto' : paperFormat === '80mm' ? '80mm auto' : 'A4 portrait'};
-        margin: ${paperFormat === 'A4' ? '10mm 8mm' : '0'};
+        size: ${paperFormat === 'A4' ? 'A4 portrait' : paperFormat === '80mm' ? '80mm auto' : '58mm auto'};
+        margin: 0 !important;
       }
       @media print {
         .no-print {
           display: none !important;
         }
-        body {
-          padding: 0 !important;
+        html, body {
           margin: 0 !important;
+          padding: 0 !important;
           background: #ffffff !important;
+          width: ${paperFormat === 'A4' ? '210mm' : paperFormat === '80mm' ? '80mm' : '58mm'} !important;
         }
         #printable-receipt {
-          width: 100% !important;
-          max-width: 100% !important;
-          margin: 0 auto !important;
-          padding: 0 !important;
+          width: ${paperFormat === 'A4' ? '210mm' : paperFormat === '80mm' ? '80mm' : '58mm'} !important;
+          max-width: ${paperFormat === 'A4' ? '210mm' : paperFormat === '80mm' ? '80mm' : '58mm'} !important;
+          min-height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
+          height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
+          padding: ${paperFormat === 'A4' ? '14mm 16mm' : paperFormat === '80mm' ? '4mm' : '3mm'} !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-between !important;
           box-shadow: none !important;
           border: none !important;
+          margin: 0 auto !important;
+          background: #ffffff !important;
+          box-sizing: border-box !important;
+          page-break-inside: avoid !important;
         }
       }
       @media screen {
         body {
           background: #f1f5f9 !important;
-          padding: 20px 10px !important;
-          min-height: 100vh;
+          padding: 24px 0 !important;
           display: flex;
           flex-direction: column;
           align-items: center;
+          min-height: 100vh;
         }
         .print-toolbar {
           background: #0f172a;
           color: #ffffff;
-          padding: 10px 18px;
+          padding: 10px 20px;
           border-radius: 12px;
           margin-bottom: 20px;
           display: flex;
           align-items: center;
-          gap: 12px;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+          gap: 14px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
           font-family: 'Cairo', sans-serif;
           z-index: 100;
         }
@@ -481,11 +507,16 @@ export const ReceiptModal: React.FC = () => {
         }
         #printable-receipt {
           background: #ffffff !important;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.08) !important;
-          border: 1px solid #e2e8f0 !important;
-          padding: ${paperFormat === 'A4' ? '12mm 10mm' : paperFormat === '80mm' ? '4mm' : '3mm'} !important;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12) !important;
+          border: 1px solid #cbd5e1 !important;
+          border-radius: 2px;
+          padding: ${paperFormat === 'A4' ? '14mm 16mm' : paperFormat === '80mm' ? '4mm' : '3mm'} !important;
           width: ${paperFormat === 'A4' ? '210mm' : paperFormat === '80mm' ? '80mm' : '58mm'} !important;
-          max-width: 100% !important;
+          min-height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-between !important;
+          box-sizing: border-box !important;
         }
       }
       #printable-receipt {
@@ -515,15 +546,22 @@ export const ReceiptModal: React.FC = () => {
     </div>
     ${cloned.outerHTML}
     <script>
-      window.onload = function() {
-        setTimeout(function() {
-          window.print();
-        }, 450);
-      };
+      function triggerPrint() {
+        window.print();
+      }
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() {
+          setTimeout(triggerPrint, 300);
+        });
+      } else {
+        window.onload = function() {
+          setTimeout(triggerPrint, 500);
+        };
+      }
       window.onafterprint = function() {
         setTimeout(function() {
           try { window.close(); } catch(e) {}
-        }, 1200);
+        }, 1500);
       };
     </script>
   </body>
@@ -687,9 +725,11 @@ export const ReceiptModal: React.FC = () => {
                             {business.activity}
                           </p>
                         ) : null}
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          {business.address} - {business.city}
-                        </p>
+                        {(business.address?.trim() || business.city?.trim()) && (
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {[business.address?.trim(), business.city?.trim()].filter(Boolean).join(' - ')}
+                          </p>
+                        )}
                         <p className="text-xs text-slate-400 font-mono">{lang === 'ar' ? 'الهاتف :' : 'Tél :'} {business.phone}</p>
                       </div>
                     </div>
@@ -763,36 +803,36 @@ export const ReceiptModal: React.FC = () => {
                     </div>
 
                     {/* Totals Breakdown */}
-                    <div className="w-64 space-y-2 text-xs">
-                      <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-600 font-semibold">
+                    <div className="w-80 shrink-0 space-y-2 text-xs">
+                      <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                        <span className="text-slate-600 font-semibold whitespace-nowrap">
                           {business.taxEnabled 
                             ? (lang === 'ar' ? 'المجموع الفرعي (HT)' : 'Sous-total (HT)')
                             : (lang === 'ar' ? 'المجموع الفرعي :' : 'Sous-total :')}
                         </span>
-                        <span className="font-mono font-bold text-slate-800">{formatMAD(activeSaleReceipt.subtotal, lang)}</span>
+                        <span className="font-mono font-bold text-slate-800 whitespace-nowrap">{formatMAD(activeSaleReceipt.subtotal, lang)}</span>
                       </div>
                       {activeSaleReceipt.discount > 0 && (
-                        <div className="flex justify-between py-1 border-b border-slate-100 text-emerald-700">
-                          <span className="font-semibold">{lang === 'ar' ? 'الخصم المطبق :' : 'Remise :'}</span>
-                          <span className="font-mono font-bold">-{formatMAD(activeSaleReceipt.discount, lang)}</span>
+                        <div className="flex justify-between items-center py-1 border-b border-slate-100 text-emerald-700">
+                          <span className="font-semibold whitespace-nowrap">{lang === 'ar' ? 'الخصم المطبق :' : 'Remise :'}</span>
+                          <span className="font-mono font-bold whitespace-nowrap">-{formatMAD(activeSaleReceipt.discount, lang)}</span>
                         </div>
                       )}
                       {business.taxEnabled && (
-                        <div className="flex justify-between py-1 border-b border-slate-100">
-                          <span className="text-slate-600 font-semibold">{lang === 'ar' ? 'الضريبة' : 'TVA'} (TVA {business.defaultTaxRate ?? 20}%)</span>
-                          <span className="font-mono font-bold text-slate-800">
+                        <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                          <span className="text-slate-600 font-semibold whitespace-nowrap">{lang === 'ar' ? 'الضريبة' : 'TVA'} (TVA {business.defaultTaxRate ?? 20}%)</span>
+                          <span className="font-mono font-bold text-slate-800 whitespace-nowrap">
                             {formatMAD(activeSaleReceipt.tax_total || 0, lang)}
                           </span>
                         </div>
                       )}
-                      <div className="flex justify-between py-2 text-sm font-black text-slate-900 border-t border-slate-300">
-                        <span>
+                      <div className="flex justify-between items-center py-2 text-sm font-black text-slate-900 border-t border-slate-300">
+                        <span className="whitespace-nowrap">
                           {business.taxEnabled 
                             ? (lang === 'ar' ? 'الإجمالي الصافي (TTC)' : 'Total Net (TTC)')
                             : (lang === 'ar' ? 'المجموع الإجمالي الصافي :' : 'Total Net :')}
                         </span>
-                        <span style={{ color: business.invoiceColor || '#C02626' }} className="font-mono text-base font-bold">{formatMAD(activeSaleReceipt.total, lang)}</span>
+                        <span style={{ color: business.invoiceColor || '#C02626' }} className="font-mono text-base font-bold whitespace-nowrap">{formatMAD(activeSaleReceipt.total, lang)}</span>
                       </div>
                     </div>
                   </div>
