@@ -923,7 +923,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                   : btSuccess 
                   ? (lang === 'ar' ? 'تمت الطباعة!' : 'Imprimé !')
                   : isStandalone
-                  ? (lang === 'ar' ? 'طباعة تذكرة' : 'Imprimer')
+                  ? (lang === 'ar' ? 'طباعة عبر RawBT' : 'RawBT')
                   : (lang === 'ar' ? 'طباعة بلوتوث' : 'Bluetooth')}
               </span>
             </button>
