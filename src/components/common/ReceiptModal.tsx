@@ -327,126 +327,210 @@ export const ReceiptModal: React.FC = () => {
   if (!activeSaleReceipt) return null;
 
   const handlePrint = () => {
-    // Detect if we are inside a sandboxed iframe (like AI Studio preview), where direct window.print() is blocked by browser policies
-    const isIframe = window.self !== window.top;
-    
-    if (isIframe) {
-      try {
-        const printContent = document.getElementById('printable-receipt');
-        if (!printContent) {
-          window.print();
-          return;
-        }
-
-        const newWin = window.open('', '_blank');
-        if (!newWin) {
-          const alertMsg = lang === 'ar' 
-            ? '⚠️ يرجى تفعيل "السماح بالنوافذ المنبثقة" (Popups) في متصفحك لفتح الفاتورة في صفحة جديدة صالحة للطباعة.'
-            : lang === 'fr'
-            ? '⚠️ Veuillez activer les fenêtres surgissantes (Popups) dans votre navigateur pour ouvrir la facture sur une nouvelle page imprimable.'
-            : '⚠️ Please enable popups in your browser to open and print the invoice.';
-          alert(alertMsg);
-          return;
-        }
-
-        newWin.document.write(`
-          <html dir="${lang === 'ar' ? 'rtl' : 'ltr'}">
-            <head>
-              <title>${lang === 'ar' ? 'طباعة فاتورة رقم' : 'Impression Facture N°'} ${activeSaleReceipt.invoice_number}</title>
-              <!-- Load Tailwind Play CDN to render every layout utility class flawlessly -->
-              <script src="https://cdn.tailwindcss.com"></script>
-              <script>
-                tailwind.config = {
-                  theme: {
-                    extend: {
-                      fontFamily: {
-                        sans: ['Cairo', 'sans-serif'],
-                      }
-                    }
-                  }
-                }
-              </script>
-              <style>
-                @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
-                
-                * {
-                  box-sizing: border-box !important;
-                }
-                
-                body {
-                  font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important;
-                  margin: 0 !important;
-                  padding: ${paperFormat === 'A4' ? '20px' : '0'} !important;
-                  background: #ffffff !important;
-                  color: #000000 !important;
-                  -webkit-print-color-adjust: exact !important;
-                  print-color-adjust: exact !important;
-                }
-
-                /* Override and lock precise dimensions based on the chosen format */
-                #printable-receipt {
-                  transform: none !important;
-                  position: relative !important;
-                  top: 0 !important;
-                  left: 0 !important;
-                  box-shadow: none !important;
-                  border: none !important;
-                  margin: 0 auto !important;
-                  background: #ffffff !important;
-                  
-                  /* Dimension constraints */
-                  width: ${paperFormat === '58mm' ? '58mm' : paperFormat === '80mm' ? '80mm' : '794px'} !important;
-                  max-width: ${paperFormat === '58mm' ? '58mm' : paperFormat === '80mm' ? '80mm' : '794px'} !important;
-                  min-height: ${paperFormat === 'A4' ? '1123px' : 'auto'} !important;
-                  
-                  /* Exact padding settings */
-                  padding: ${paperFormat === 'A4' ? '12mm' : paperFormat === '80mm' ? '4mm' : '3mm'} !important;
-                }
-
-                /* Ensure tables inside thermal print are clear and concise */
-                table {
-                  width: 100% !important;
-                  border-collapse: collapse !important;
-                }
-
-                @media print {
-                  body {
-                    padding: 0 !important;
-                    background: #ffffff !important;
-                  }
-                  #printable-receipt {
-                    border: none !important;
-                    box-shadow: none !important;
-                  }
-                  @page {
-                    size: ${paperFormat === '58mm' ? '58mm 210mm' : paperFormat === '80mm' ? '80mm 297mm' : 'A4'};
-                    margin: 0 !important;
-                  }
-                }
-              </style>
-            </head>
-            <body>
-              ${printContent.outerHTML}
-              <script>
-                // We wait for Tailwind to compile and style the elements before printing
-                window.onload = function() {
-                  setTimeout(function() {
-                    window.print();
-                    setTimeout(function() {
-                      window.close();
-                    }, 800);
-                  }, 800);
-                };
-              </script>
-            </body>
-          </html>
-        `);
-        newWin.document.close();
-      } catch (e) {
-        console.error('Bypass printing failed, executing window.print()', e);
+    try {
+      const printContent = document.getElementById('printable-receipt');
+      if (!printContent) {
         window.print();
+        return;
       }
-    } else {
+
+      // Clone node to strip inline transform / scale from screen preview
+      const cloned = printContent.cloneNode(true) as HTMLElement;
+      cloned.style.transform = 'none';
+      cloned.style.transformOrigin = 'unset';
+      cloned.style.position = 'relative';
+      cloned.style.top = '0';
+      cloned.style.left = '0';
+      cloned.style.right = '0';
+      cloned.style.bottom = '0';
+      cloned.style.boxShadow = 'none';
+      cloned.style.border = 'none';
+      cloned.style.margin = '0 auto';
+
+      if (paperFormat === 'A4') {
+        cloned.style.width = '100%';
+        cloned.style.maxWidth = '100%';
+        cloned.style.minHeight = 'auto';
+        cloned.style.padding = '0';
+      } else {
+        cloned.style.width = paperFormat === '58mm' ? '58mm' : '80mm';
+        cloned.style.maxWidth = paperFormat === '58mm' ? '58mm' : '80mm';
+        cloned.style.minHeight = 'auto';
+        cloned.style.padding = paperFormat === '80mm' ? '4mm' : '3mm';
+      }
+
+      const newWin = window.open('', '_blank');
+      if (!newWin) {
+        const alertMsg = lang === 'ar' 
+          ? '⚠️ يرجى تفعيل "السماح بالنوافذ المنبثقة" (Popups) في متصفحك لفتح الفاتورة في صفحة جديدة صالحة للطباعة.'
+          : lang === 'fr'
+          ? '⚠️ Veuillez activer les fenêtres surgissantes (Popups) dans votre navigateur pour ouvrir la facture sur une nouvelle page imprimable.'
+          : '⚠️ Please enable popups in your browser to open and print the invoice.';
+        alert(alertMsg);
+        window.print();
+        return;
+      }
+
+      const headStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+        .map(el => el.outerHTML)
+        .join('\n');
+
+      newWin.document.open();
+      newWin.document.write(`<!DOCTYPE html>
+<html dir="${lang === 'ar' ? 'rtl' : 'ltr'}" lang="${lang}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${lang === 'ar' ? 'طباعة فاتورة رقم' : 'Impression Facture N°'} ${activeSaleReceipt.invoice_number}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Cairo', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
+    ${headStyles}
+    <style>
+      * {
+        box-sizing: border-box !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important;
+      }
+      @page {
+        size: ${paperFormat === '58mm' ? '58mm auto' : paperFormat === '80mm' ? '80mm auto' : 'A4 portrait'};
+        margin: ${paperFormat === 'A4' ? '10mm 8mm' : '0'};
+      }
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+        body {
+          padding: 0 !important;
+          margin: 0 !important;
+          background: #ffffff !important;
+        }
+        #printable-receipt {
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+      }
+      @media screen {
+        body {
+          background: #f1f5f9 !important;
+          padding: 20px 10px !important;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .print-toolbar {
+          background: #0f172a;
+          color: #ffffff;
+          padding: 10px 18px;
+          border-radius: 12px;
+          margin-bottom: 20px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+          font-family: 'Cairo', sans-serif;
+          z-index: 100;
+        }
+        .print-btn {
+          background: #0d9488;
+          color: #ffffff;
+          border: none;
+          padding: 8px 18px;
+          border-radius: 8px;
+          font-weight: 700;
+          font-size: 13px;
+          cursor: pointer;
+          font-family: 'Cairo', sans-serif;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .close-btn {
+          background: #334155;
+          color: #cbd5e1;
+          border: none;
+          padding: 8px 14px;
+          border-radius: 8px;
+          font-size: 13px;
+          cursor: pointer;
+          font-family: 'Cairo', sans-serif;
+        }
+        #printable-receipt {
+          background: #ffffff !important;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.08) !important;
+          border: 1px solid #e2e8f0 !important;
+          padding: ${paperFormat === 'A4' ? '12mm 10mm' : paperFormat === '80mm' ? '4mm' : '3mm'} !important;
+          width: ${paperFormat === 'A4' ? '210mm' : paperFormat === '80mm' ? '80mm' : '58mm'} !important;
+          max-width: 100% !important;
+        }
+      }
+      #printable-receipt {
+        transform: none !important;
+        position: relative !important;
+        top: 0 !important;
+        left: 0 !important;
+        box-sizing: border-box !important;
+      }
+      table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="print-toolbar no-print">
+      <span style="font-weight: bold; font-size: 13px;">
+        📄 ${lang === 'ar' ? 'معاينة الفاتورة' : 'Aperçu Facture'} (${activeSaleReceipt.invoice_number})
+      </span>
+      <button onclick="window.print()" class="print-btn">
+        🖨️ ${lang === 'ar' ? 'طباعة الآن' : 'Imprimer maintenant'}
+      </button>
+      <button onclick="window.close()" class="close-btn">
+        ✕ ${lang === 'ar' ? 'إغلاق' : 'Fermer'}
+      </button>
+    </div>
+    ${cloned.outerHTML}
+    <script>
+      window.onload = function() {
+        setTimeout(function() {
+          window.print();
+        }, 450);
+      };
+      window.onafterprint = function() {
+        setTimeout(function() {
+          try { window.close(); } catch(e) {}
+        }, 1200);
+      };
+    </script>
+  </body>
+</html>`);
+      newWin.document.close();
+    } catch (e) {
+      console.error('Window print error, falling back to window.print()', e);
       window.print();
     }
   };

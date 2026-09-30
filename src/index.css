@@ -33,42 +33,101 @@
   background: #94a3b8;
 }
 
+/* Print portal hidden on screen */
+#tajer-print-portal {
+  display: none;
+}
+
 /* Thermal and standard printing rules */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
+
+  /* Reset body and html */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   /* Hide absolutely everything in the document by default */
   body * {
-    visibility: hidden !important;
+    visibility: hidden;
+  }
+
+  /* Neutralize all modal backdrops, overlays, and centered parent wrappers */
+  body,
+  #root,
+  .fixed,
+  [class*="backdrop-"],
+  [class*="overflow-"],
+  .a4-preview-wrapper {
+    position: static !important;
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  /* Hide modal buttons, headers, and navigation */
+  .no-print,
+  .no-print * {
+    display: none !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
   
-  /* Show only the printable invoice/receipt and its contents */
+  /* Show only the printable invoice/receipt or portal */
+  #tajer-print-portal,
+  #tajer-print-portal *,
   #printable-receipt,
-  #printable-receipt * {
+  #printable-receipt *,
+  #printable-purchase-receipt,
+  #printable-purchase-receipt * {
     visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
-  /* Format and size the printable element correctly to take up the whole printable page */
-  #printable-receipt {
+  /* Position the printable element at the exact top-left of the page if printed directly */
+  #printable-receipt,
+  #printable-purchase-receipt {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
+    right: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 20px !important;
     border: none !important;
     box-shadow: none !important;
     transform: none !important;
     background: #ffffff !important;
     color: #000000 !important;
   }
-  
-  /* Reset some basic body values for printing */
-  body {
-    background: #ffffff !important;
-    color: #000000 !important;
+
+  /* Force table headers to maintain backgrounds and borders */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
   }
-  
-  @page {
-    margin: 0;
+  thead, thead tr, thead th {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
