@@ -87,6 +87,21 @@ export const ThermalPrinterGuideModal: React.FC<Props> = ({ isOpen, onClose, lan
         {/* Content */}
         <div className="p-4 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto text-xs sm:text-sm text-slate-700 dark:text-slate-300">
           
+          {/* Standalone PWA Notice */}
+          <div className="p-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900/40 text-teal-950 dark:text-teal-200 flex items-start gap-2.5">
+            <Smartphone className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-bold block">
+                {lang === 'ar' ? 'ملاحظة مهمة لمستخدمي التطبيق على الشاشة الرئيسية (Add to Home screen):' : 'Note pour l\'application ajoutée à l\'écran d\'accueil :'}
+              </span>
+              <p className="text-[11px] leading-relaxed text-teal-900/90 dark:text-teal-200/90">
+                {lang === 'ar'
+                  ? 'عند تثبيت التطبيق على شاشة الهاتف، يمنع نظام الهاتف تشغيل نافذة Web Bluetooth التابعة للمتصفح. الحل الأفضل والأسهل 100% للطباعة المباشرة من داخل التطبيق دون الحاجة للمتصفح هو استخدام تطبيق RawBT المجاني؛ أو يمكنك فتح الفاتورة في متصفح Google Chrome.'
+                  : 'Dans l\'application installée sur l\'écran d\'accueil (PWA), Web Bluetooth peut être restreint par le système. Utilisez l\'application gratuite RawBT pour imprimer directement en un clic sans ouvrir de navigateur.'}
+              </p>
+            </div>
+          </div>
+
           {/* Why phone didn't connect alert */}
           <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
             <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />

@@ -41,6 +41,15 @@ export class ThermalPrinterService {
     return /iPhone|iPad|iPod/i.test(navigator.userAgent);
   }
 
+  public isStandalone(): boolean {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true ||
+      document.referrer.includes('android-app://')
+    );
+  }
+
   public isWebBluetoothSupported(): boolean {
     return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
   }
@@ -54,13 +63,41 @@ export class ThermalPrinterService {
   }
 
   /**
+   * Open the current app directly inside Google Chrome (useful on Android when inside PWA)
+   */
+  public openInChrome(targetUrl?: string): void {
+    if (typeof window === 'undefined') return;
+    const url = targetUrl || window.location.href;
+    if (this.isAndroid()) {
+      // Android Intent to open URL directly in Google Chrome app
+      const cleanUrl = url.replace(/^https?:\/\//, '');
+      const chromeIntent = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end;`;
+      window.location.href = chromeIntent;
+    } else {
+      window.open(url, '_blank');
+    }
+  }
+
+  /**
    * Connect to a Bluetooth ESC/POS printer via Web Bluetooth API
    */
   public async connectBluetoothPrinter(): Promise<{ success: boolean; deviceName?: string; error?: string }> {
     if (!this.isWebBluetoothSupported()) {
+      if (this.isStandalone()) {
+        return {
+          success: false,
+          error: 'في تطبيق الشاشة الرئيسية (PWA)، يمنع نظام الهاتف تشغيل خاصية Web Bluetooth المباشرة للمتصفح. يمكنك الطباعة فوراً بنقرة واحدة عبر تطبيق RawBT، أو عبر نظام الهاتف، أو فتح الفاتورة في متصفح Google Chrome.'
+        };
+      }
+      if (this.isIOS()) {
+        return {
+          success: false,
+          error: 'نظام iOS (أجهزة آيفون) لا يدعم خاصية Web Bluetooth في المتصفحات. يرجى استخدام زر "طباعة عادية" أو مشاركة الفاتورة عبر الواتساب.'
+        };
+      }
       return {
         success: false,
-        error: 'متصفحك لا يدعم خاصية Web Bluetooth. يرجى استخدام متصفح Google Chrome على هاتف أندرويد أو جهاز الكمبيوتر.'
+        error: 'متصفحك لا يدعم خاصية Web Bluetooth. يرجى استخدام متصفح Google Chrome على هاتف أندرويد أو جهاز الكمبيوتر، أو الطباعة المباشرة عبر RawBT.'
       };
     }
 
@@ -397,6 +434,7 @@ export class ThermalPrinterService {
 
   /**
    * One-Click Print via RawBT (Free Android Thermal Driver)
+   * Supports direct Android Intent with Play Store fallback if not yet installed.
    */
   public async printReceiptViaRawBT(
     element: HTMLElement,
@@ -407,14 +445,76 @@ export class ThermalPrinterService {
       const dataUrl = canvas.toDataURL('image/png');
       const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
 
-      // Trigger RawBT URL scheme
-      const rawbtUrl = `rawbt:data:image/png;base64,${base64}`;
-      window.location.href = rawbtUrl;
+      // Android Intent with Play Store fallback
+      const playStoreFallback = encodeURIComponent('https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter');
+      const intentUrl = `intent:data:image/png;base64,${base64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;S.browser_fallback_url=${playStoreFallback};end;`;
+
+      const link = document.createElement('a');
+      link.href = intentUrl;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        if (link.parentNode) link.parentNode.removeChild(link);
+      }, 1000);
 
       return { success: true };
     } catch (e: any) {
-      console.error('RawBT print error:', e);
-      return { success: false, error: e?.message || 'تعذر تشغيل تطبيق RawBT' };
+      console.error('RawBT print error, trying rawbt: scheme:', e);
+      try {
+        const canvas = await this.renderElementToCanvas(element, paperWidth);
+        const dataUrl = canvas.toDataURL('image/png');
+        const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+        window.location.href = `rawbt:data:image/png;base64,${base64}`;
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'تعذر تشغيل تطبيق RawBT' };
+      }
+    }
+  }
+
+  /**
+   * Share ticket directly as a high resolution PNG image (Web Share API)
+   * Allows sharing to Bluetooth devices, WhatsApp, or any printer apps installed on Android/iOS.
+   */
+  public async shareReceiptAsImage(
+    element: HTMLElement,
+    title: string = 'فاتورة مبيعات',
+    paperWidth: '58mm' | '80mm' = '80mm'
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const canvas = await this.renderElementToCanvas(element, paperWidth);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('فشل إنشاء صورة الفاتورة');
+
+      const file = new File([blob], `ticket-${Date.now()}.png`, { type: 'image/png' });
+
+      const nav: any = navigator;
+      if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
+        await nav.share({
+          title,
+          text: title,
+          files: [file],
+        });
+        return { success: true };
+      } else {
+        // Fallback: download PNG image
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ticket-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 1000);
+        return { success: true };
+      }
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return { success: true };
+      console.error('Share ticket image error:', e);
+      return { success: false, error: e?.message || 'فشلت مشاركة الفاتورة' };
     }
   }
 }
