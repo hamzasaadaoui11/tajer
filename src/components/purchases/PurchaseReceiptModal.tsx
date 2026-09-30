@@ -402,7 +402,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                         <img src={business.logo} alt="Company Logo" className="w-16 h-16 rounded-xl object-contain border border-slate-100 bg-slate-50 p-1 shrink-0" />
                       )}
                       <div>
-                        <h1 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black">
+                        <h1 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black tracking-tight">
                           {business.name}
                         </h1>
                         {business.activity ? (
@@ -410,19 +410,15 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                             {business.activity}
                           </p>
                         ) : null}
-                        {(business.address || business.city) && (
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            {[business.address, business.city].filter(Boolean).join(' - ')}
-                          </p>
-                        )}
-                        {business.phone && (
-                          <p className="text-xs text-slate-400 font-mono">{lang === 'ar' ? 'الهاتف :' : 'Tél :'} {business.phone}</p>
-                        )}
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {business.address} - {business.city}
+                        </p>
+                        <p className="text-xs text-slate-400 font-mono">{lang === 'ar' ? 'الهاتف :' : 'Tél :'} {business.phone}</p>
                       </div>
                     </div>
 
                     <div className={lang === 'ar' ? 'text-left' : 'text-right'}>
-                      <h2 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black">
+                      <h2 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black tracking-wider">
                         {lang === 'ar' ? 'وصل استلام ومشتريات' : "Bon d'achat & de réception"}
                       </h2>
                       <p className="text-xs font-bold text-slate-500 mt-0.5">
@@ -441,7 +437,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                   <div className={`grid grid-cols-2 gap-6 my-6 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                     {/* Fournisseur */}
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                      <div style={{ color: business.invoiceColor || '#C02626' }} className="text-[10px] font-bold mb-1">
+                      <div style={{ color: business.invoiceColor || '#C02626' }} className="text-[10px] font-bold tracking-wider mb-1">
                         {lang === 'ar' ? 'المورد / الموزع :' : 'Fournisseur / Distributeur :'}
                       </div>
                       <div className="font-extrabold text-slate-900 text-sm">
@@ -466,7 +462,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
 
                     {/* Acheteur / Magasin */}
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                      <div className="text-[10px] font-bold text-slate-500 mb-1">
+                      <div className="text-[10px] font-bold text-slate-500 tracking-wider mb-1">
                         {lang === 'ar' ? 'المستلم / المشتري :' : 'Destinataire / Acheteur :'}
                       </div>
                       <div className="font-extrabold text-slate-900 text-sm">
@@ -625,9 +621,9 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                       {business.a4Footer}
                     </div>
                   )}
-                  <p className="font-semibold text-slate-700">
+                  <p className="font-semibold text-slate-700 uppercase">
                     {[
-                      business.name || null,
+                      business.name ? business.name : null,
                       business.capital?.trim() ? `${lang === 'ar' ? 'رأس المال :' : 'Capital :'} ${business.capital.trim()}` : null,
                       business.phone?.trim() ? `${lang === 'ar' ? 'الهاتف :' : 'Tél :'} ${business.phone.trim()}` : null,
                       [business.address?.trim(), business.city?.trim()].filter(Boolean).join(' - ') || null,

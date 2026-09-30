@@ -595,7 +595,7 @@ export const ReceiptModal: React.FC = () => {
                         <img src={business.logo} alt="Company Logo" className="w-16 h-16 rounded-xl object-contain border border-slate-100 bg-slate-50 p-1 shrink-0" />
                       )}
                       <div>
-                        <h1 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black">
+                        <h1 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black tracking-tight">
                           {business.name}
                         </h1>
                         {business.activity ? (
@@ -603,19 +603,15 @@ export const ReceiptModal: React.FC = () => {
                             {business.activity}
                           </p>
                         ) : null}
-                        {(business.address || business.city) && (
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            {[business.address, business.city].filter(Boolean).join(' - ')}
-                          </p>
-                        )}
-                        {business.phone && (
-                          <p className="text-xs text-slate-400 font-mono">{lang === 'ar' ? 'الهاتف :' : 'Tél :'} {business.phone}</p>
-                        )}
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {business.address} - {business.city}
+                        </p>
+                        <p className="text-xs text-slate-400 font-mono">{lang === 'ar' ? 'الهاتف :' : 'Tél :'} {business.phone}</p>
                       </div>
                     </div>
 
                     <div className={lang === 'ar' ? 'text-left' : 'text-right'}>
-                      <h2 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black">
+                      <h2 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black tracking-wider">
                         {lang === 'ar' ? 'فاتورة بيع' : 'Facture de Vente'}
                       </h2>
                       <p className="text-sm font-extrabold text-slate-800 mt-1 font-mono">
@@ -630,7 +626,7 @@ export const ReceiptModal: React.FC = () => {
                   {/* Client Box: ADRESSÉ À / موجه إلى */}
                   <div className="flex justify-start my-6">
                     <div className={`bg-slate-50 border border-slate-200 rounded-lg p-3.5 w-72 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                         {lang === 'ar' ? 'فاتورة موجهة إلى :' : 'Facturé à :'}
                       </p>
                       <p className="text-base font-black text-slate-900 mt-0.5">
@@ -639,11 +635,11 @@ export const ReceiptModal: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Items Table with Header */}
+                  {/* Items Table with Red Header */}
                   <div className="my-6">
                     <table className={`w-full border-collapse border border-slate-200 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                       <thead>
-                        <tr style={{ backgroundColor: business.invoiceColor || '#C02626' }} className="text-white text-xs font-extrabold">
+                        <tr style={{ backgroundColor: business.invoiceColor || '#C02626' }} className="text-white text-xs font-extrabold tracking-wider">
                           <th className={`py-2.5 px-4 whitespace-nowrap ${lang === 'ar' ? 'text-right' : 'text-left'}`}>{lang === 'ar' ? 'السلعة / البيان' : 'Désignation / Article'}</th>
                           <th className="py-2.5 px-4 text-center w-24 whitespace-nowrap">{lang === 'ar' ? 'الكمية' : 'Qté'}</th>
                           <th className={`py-2.5 px-4 w-32 whitespace-nowrap ${lang === 'ar' ? 'text-left' : 'text-right'}`}>{lang === 'ar' ? 'ثمن الوحدة' : 'Prix Unitaire'}</th>
@@ -773,7 +769,7 @@ export const ReceiptModal: React.FC = () => {
                   )}
                   <p className="font-semibold text-slate-700">
                     {[
-                      business.name || null,
+                      business.name ? business.name : null,
                       business.capital?.trim() ? `${lang === 'ar' ? 'رأس المال :' : 'Capital :'} ${business.capital.trim()}` : null,
                       business.phone?.trim() ? `${lang === 'ar' ? 'الهاتف :' : 'Tél :'} ${business.phone.trim()}` : null,
                       [business.address?.trim(), business.city?.trim()].filter(Boolean).join(' - ') || null,
