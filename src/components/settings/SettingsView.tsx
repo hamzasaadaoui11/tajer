@@ -146,7 +146,7 @@ export const SettingsView: React.FC = () => {
   const [defaultTaxRate, setDefaultTaxRate] = useState(business.defaultTaxRate ?? 20);
 
   // Helper to compress images automatically
-  const compressImage = (file: File, maxDim = 480, quality = 0.75): Promise<string> => {
+  const compressImage = (file: File, maxDim = 320, quality = 0.60): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (event) => {

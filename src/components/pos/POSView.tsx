@@ -23,10 +23,11 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
-import { PaymentMethod, Customer, Sale } from '../../types';
+import { PaymentMethod, Customer, Sale, Product } from '../../types';
 import { playBeep } from '../../services/barcode';
 import { formatMAD, formatUnit } from '../../i18n/locales';
 import { syncEngine } from '../../services/sync';
+import { ProductImageModal } from '../common/ProductImageModal';
 
 export const POSView: React.FC = () => {
   const {
@@ -57,6 +58,7 @@ export const POSView: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
+  const [zoomedProduct, setZoomedProduct] = useState<Product | null>(null);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -342,7 +344,9 @@ export const POSView: React.FC = () => {
                       <img 
                         src={product.image_url} 
                         alt={product.name} 
-                        className="w-full h-24 rounded-xl object-cover border border-slate-100 dark:border-slate-800" 
+                        onClick={(e) => { e.stopPropagation(); setZoomedProduct(product); }}
+                        className="w-full h-24 rounded-xl object-cover border border-slate-100 dark:border-slate-800 cursor-pointer hover:opacity-95 hover:scale-[1.02] transition shadow-xs" 
+                        title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
                       />
                     ) : (
                       <div className="w-full h-24 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-lg">
@@ -861,6 +865,15 @@ export const POSView: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Product Image Zoom Modal */}
+      <ProductImageModal
+        isOpen={Boolean(zoomedProduct)}
+        onClose={() => setZoomedProduct(null)}
+        product={zoomedProduct}
+        lang={lang}
+        formatCurrency={(val) => formatCurrency(val)}
+      />
 
     </div>
   );

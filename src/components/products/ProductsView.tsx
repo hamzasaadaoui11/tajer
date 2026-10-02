@@ -25,6 +25,7 @@ import { generateRandomBarcode } from '../../services/barcode';
 import { formatMAD, formatUnit } from '../../i18n/locales';
 import { generateSeedData } from '../../services/seed';
 import { syncEngine } from '../../services/sync';
+import { ProductImageModal } from '../common/ProductImageModal';
 
 const formatCategoryName = (catName: string, lang: string) => {
   if (lang === 'ar' || !catName) return catName;
@@ -76,6 +77,9 @@ export const ProductsView: React.FC = () => {
 
   // Product Delete Confirmation Modal
   const [deleteConfirmProduct, setDeleteConfirmProduct] = useState<Product | null>(null);
+
+  // Product Image Zoom Modal State
+  const [zoomedProduct, setZoomedProduct] = useState<Product | null>(null);
 
   const products = useMemo(() => db.getProducts(business.id, branch.id), [business.id, branch.id, dataVersion]);
   const categories = useMemo(() => db.getCategories(business.id), [business.id, dataVersion]);
@@ -162,8 +166,8 @@ export const ProductsView: React.FC = () => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 640;
-          const MAX_HEIGHT = 640;
+          const MAX_WIDTH = 360;
+          const MAX_HEIGHT = 360;
           let width = img.width;
           let height = img.height;
 
@@ -183,7 +187,7 @@ export const ProductsView: React.FC = () => {
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.60);
             setImageUrl(dataUrl);
 
             // Compute compressed size
@@ -496,7 +500,9 @@ export const ProductsView: React.FC = () => {
                         <img 
                           src={p.image_url} 
                           alt={p.name} 
-                          className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800" 
+                          onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
+                          className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800 cursor-pointer hover:opacity-95 hover:scale-105 transition shadow-xs" 
+                          title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
                         />
                       ) : (
                         <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center shrink-0 font-bold text-xs">
@@ -619,7 +625,9 @@ export const ProductsView: React.FC = () => {
                               <img 
                                 src={p.image_url} 
                                 alt={p.name} 
-                                className="w-12 h-12 rounded-xl object-cover border border-slate-100 dark:border-slate-800" 
+                                onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
+                                className="w-12 h-12 rounded-xl object-cover border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-105 transition shadow-xs" 
+                                title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
                               />
                             ) : (
                               <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-xs">
@@ -1116,6 +1124,15 @@ export const ProductsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Product Image Zoom Modal */}
+      <ProductImageModal
+        isOpen={Boolean(zoomedProduct)}
+        onClose={() => setZoomedProduct(null)}
+        product={zoomedProduct}
+        lang={lang}
+        formatCurrency={(val) => formatMAD(val, lang)}
+      />
 
     </div>
   );
