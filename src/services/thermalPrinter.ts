@@ -340,7 +340,7 @@ export class ThermalPrinterService {
   }
 
   /**
-   * Convert DOM Element to high resolution Canvas using html2canvas
+   * Convert DOM Element to high resolution Canvas using html2canvas with robust offscreen rendering
    */
   public async renderElementToCanvas(
     element: HTMLElement, 
@@ -348,19 +348,25 @@ export class ThermalPrinterService {
   ): Promise<HTMLCanvasElement> {
     const targetWidth = paperWidth === '58mm' ? 384 : 576;
     
-    // Create offscreen container
+    // Create offscreen container properly rendered by browser layout
     const clone = element.cloneNode(true) as HTMLElement;
     clone.style.width = `${targetWidth}px`;
     clone.style.maxWidth = `${targetWidth}px`;
     clone.style.background = '#ffffff';
     clone.style.color = '#000000';
-    clone.style.position = 'absolute';
-    clone.style.left = '-9999px';
+    clone.style.position = 'fixed';
+    clone.style.left = '0';
     clone.style.top = '0';
+    clone.style.opacity = '0.001';
+    clone.style.zIndex = '-9999';
+    clone.style.pointerEvents = 'none';
     clone.style.transform = 'none';
     clone.style.boxShadow = 'none';
     clone.style.border = 'none';
     document.body.appendChild(clone);
+
+    // Give browser time to layout and paint
+    await new Promise(r => setTimeout(r, 250));
 
     try {
       const canvas = await html2canvas(clone, {
@@ -370,23 +376,38 @@ export class ThermalPrinterService {
         backgroundColor: '#ffffff',
         width: targetWidth,
         windowWidth: targetWidth,
+        logging: false,
       });
       return canvas;
     } catch (e) {
       console.error('html2canvas render error:', e);
+      // Fallback: draw actual text lines from element if html2canvas fails
+      const textContent = clone.innerText || 'فاتورة مبيعات';
+      const lines = textContent.split('\n').filter(l => l.trim().length > 0);
+      
       const fallbackCanvas = document.createElement('canvas');
       fallbackCanvas.width = targetWidth;
-      fallbackCanvas.height = 300;
+      const lineHeight = 24;
+      fallbackCanvas.height = Math.max(400, lines.length * lineHeight + 80);
       const ctx = fallbackCanvas.getContext('2d')!;
+      
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, targetWidth, 300);
+      ctx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
+      
       ctx.fillStyle = '#000000';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('تطبيق تاجر - فاتورة مبيعات', targetWidth / 2, 50);
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'right';
+      
+      let y = 40;
+      for (const line of lines.slice(0, 50)) {
+        ctx.fillText(line, targetWidth - 20, y);
+        y += lineHeight;
+      }
       return fallbackCanvas;
     } finally {
-      document.body.removeChild(clone);
+      if (clone.parentNode) {
+        document.body.removeChild(clone);
+      }
     }
   }
 
