@@ -28,10 +28,27 @@ const STORAGE_KEY_PREFIX = 'tajer_db_';
 
 class LocalDatabase {
   private tenantId: string = localStorage.getItem('tajer_active_tenant') || 'default';
+  private memoryCache: Map<string, any> = new Map();
+
+  constructor() {
+    // Invalidate cache if another tab or window modifies localStorage
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', () => {
+        this.clearCache();
+      });
+    }
+  }
+
+  public clearCache(): void {
+    this.memoryCache.clear();
+  }
 
   public setTenantId(id: string): void {
-    this.tenantId = id || 'default';
-    localStorage.setItem('tajer_active_tenant', this.tenantId);
+    if (this.tenantId !== id) {
+      this.tenantId = id || 'default';
+      this.clearCache();
+      localStorage.setItem('tajer_active_tenant', this.tenantId);
+    }
   }
 
   public getTenantId(): string {
@@ -43,20 +60,28 @@ class LocalDatabase {
   }
 
   public get<T>(collection: string): T[] {
+    const cacheKey = `${this.getPrefix()}${collection}`;
+    if (this.memoryCache.has(cacheKey)) {
+      return this.memoryCache.get(cacheKey);
+    }
     try {
-      let data = localStorage.getItem(`${this.getPrefix()}${collection}`);
+      let data = localStorage.getItem(cacheKey);
       if (!data && this.tenantId === 'default') {
         data = localStorage.getItem(`tajer_db_${collection}`);
       }
-      return data ? JSON.parse(data) : [];
+      const parsed = data ? JSON.parse(data) : [];
+      this.memoryCache.set(cacheKey, parsed);
+      return parsed;
     } catch {
       return [];
     }
   }
 
   public set<T>(collection: string, data: T[]): void {
+    const cacheKey = `${this.getPrefix()}${collection}`;
+    this.memoryCache.set(cacheKey, data);
     try {
-      localStorage.setItem(`${this.getPrefix()}${collection}`, JSON.stringify(data));
+      localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch (e) {
       console.error(`Failed to save ${collection}`, e);
     }

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Package, 
   Plus, 
@@ -16,7 +16,9 @@ import {
   RotateCcw,
   LayoutGrid,
   List,
-  Camera
+  Camera,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
@@ -96,6 +98,22 @@ export const ProductsView: React.FC = () => {
       return matchSearch && matchCat && matchStock;
     });
   }, [products, search, selectedCat, stockFilter]);
+
+  // Pagination State (10 products per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Reset page to 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedCat, stockFilter]);
+
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
+
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredProducts.slice(start, start + itemsPerPage);
+  }, [filteredProducts, currentPage, itemsPerPage]);
 
   // Open modal for new product
   const handleOpenNew = () => {
@@ -482,7 +500,7 @@ export const ProductsView: React.FC = () => {
         <>
           {/* Mobile Optimized Product Cards (Default on mobile, no horizontal scroll) */}
           <div className={`${viewMode === 'table' ? 'hidden' : 'block md:hidden'} space-y-2.5`}>
-            {filteredProducts.map(p => {
+            {paginatedProducts.map(p => {
               const cat = categories.find(c => c.id === p.category_id);
               const margin = p.sale_price - p.purchase_price;
               const isLow = p.current_stock <= p.min_stock;
@@ -500,6 +518,7 @@ export const ProductsView: React.FC = () => {
                         <img 
                           src={p.image_url} 
                           alt={p.name} 
+                          loading="lazy"
                           onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
                           className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800 cursor-pointer hover:opacity-95 hover:scale-105 transition shadow-xs" 
                           title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
@@ -611,7 +630,7 @@ export const ProductsView: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredProducts.map(p => {
+                  {paginatedProducts.map(p => {
                     const cat = categories.find(c => c.id === p.category_id);
                     const margin = p.sale_price - p.purchase_price;
                     const isLow = p.current_stock <= p.min_stock;
@@ -625,6 +644,7 @@ export const ProductsView: React.FC = () => {
                               <img 
                                 src={p.image_url} 
                                 alt={p.name} 
+                                loading="lazy"
                                 onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
                                 className="w-12 h-12 rounded-xl object-cover border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-105 transition shadow-xs" 
                                 title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
@@ -703,6 +723,79 @@ export const ProductsView: React.FC = () => {
               </table>
             </div>
           </div>
+
+          {/* Pagination Navigation Bar */}
+          {totalPages > 1 && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
+              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                {lang === 'ar' ? (
+                  <>
+                    عرض <span className="font-bold text-slate-800 dark:text-slate-200">{(currentPage - 1) * itemsPerPage + 1}</span> إلى{' '}
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{Math.min(currentPage * itemsPerPage, filteredProducts.length)}</span> من أصل{' '}
+                    <span className="font-bold text-teal-600 dark:text-teal-400">{filteredProducts.length}</span> سلعة
+                  </>
+                ) : (
+                  <>
+                    Affichage de <span className="font-bold text-slate-800 dark:text-slate-200">{(currentPage - 1) * itemsPerPage + 1}</span> à{' '}
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{Math.min(currentPage * itemsPerPage, filteredProducts.length)}</span> sur{' '}
+                    <span className="font-bold text-teal-600 dark:text-teal-400">{filteredProducts.length}</span> produits
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  <ChevronRight className={`w-4 h-4 ${lang === 'ar' ? '' : 'rotate-180'}`} />
+                  <span>{lang === 'ar' ? 'السابق' : 'Précédent'}</span>
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(page => {
+                      if (totalPages <= 7) return true;
+                      if (page === 1 || page === totalPages) return true;
+                      if (Math.abs(page - currentPage) <= 1) return true;
+                      return false;
+                    })
+                    .map((page, idx, arr) => {
+                      const prev = arr[idx - 1];
+                      const showEllipsis = prev && page - prev > 1;
+
+                      return (
+                        <React.Fragment key={page}>
+                          {showEllipsis && (
+                            <span className="px-1 text-slate-400 text-xs select-none">...</span>
+                          )}
+                          <button
+                            onClick={() => setCurrentPage(page)}
+                            className={`min-w-8 h-8 px-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                              currentPage === page
+                                ? 'bg-teal-600 text-white shadow-xs'
+                                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  <span>{lang === 'ar' ? 'التالي' : 'Suivant'}</span>
+                  <ChevronLeft className={`w-4 h-4 ${lang === 'ar' ? '' : 'rotate-180'}`} />
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
