@@ -86,6 +86,11 @@ export const ProductsView: React.FC = () => {
   const products = useMemo(() => db.getProducts(business.id, branch.id), [business.id, branch.id, dataVersion]);
   const categories = useMemo(() => db.getCategories(business.id), [business.id, dataVersion]);
 
+  // Ensure fresh products on view mount
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
+
   // Filtered List
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -380,7 +385,7 @@ export const ProductsView: React.FC = () => {
       <div className="bg-white dark:bg-slate-900 p-3.5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-wrap gap-2.5 items-center">
         
         {/* Search */}
-        <div className="relative flex-1 min-w-48">
+        <div className="relative w-full sm:flex-1 sm:min-w-48">
           <Search className="w-4 h-4 text-slate-400 absolute start-3 top-2.5" />
           <input
             type="text"
@@ -407,7 +412,7 @@ export const ProductsView: React.FC = () => {
         <select
           value={selectedCat}
           onChange={e => setSelectedCat(e.target.value)}
-          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs border border-transparent outline-hidden"
+          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs border border-transparent outline-hidden max-w-full"
         >
           <option value="all">{lang === 'ar' ? 'جميع الفئات' : 'Toutes les catégories'}</option>
           {categories.map(c => (
@@ -499,7 +504,7 @@ export const ProductsView: React.FC = () => {
       ) : (
         <>
           {/* Mobile Optimized Product Cards (Default on mobile, no horizontal scroll) */}
-          <div className={`${viewMode === 'table' ? 'hidden' : 'block md:hidden'} space-y-2.5`}>
+          <div className={`${viewMode === 'table' ? 'hidden' : 'block md:hidden'} space-y-3`}>
             {paginatedProducts.map(p => {
               const cat = categories.find(c => c.id === p.category_id);
               const margin = p.sale_price - p.purchase_price;
@@ -509,22 +514,22 @@ export const ProductsView: React.FC = () => {
               return (
                 <div 
                   key={p.id} 
-                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-3.5 transition"
+                  className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-4 overflow-hidden transition space-y-3"
                 >
                   {/* Top row: Image, Title, Barcode and Stock Badge */}
-                  <div className="flex items-start gap-2.5 justify-between">
-                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <div className="flex items-start gap-3 justify-between">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
                       {p.image_url ? (
                         <img 
                           src={p.image_url} 
                           alt={p.name} 
                           loading="lazy"
                           onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
-                          className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800 cursor-pointer hover:opacity-95 hover:scale-105 transition shadow-xs" 
+                          className="w-14 h-14 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800 cursor-pointer hover:opacity-95 hover:scale-105 transition shadow-2xs" 
                           title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
                         />
                       ) : (
-                        <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center shrink-0 font-bold text-xs">
+                        <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center shrink-0 font-bold text-xs">
                           📦
                         </div>
                       )}
@@ -532,13 +537,13 @@ export const ProductsView: React.FC = () => {
                         <div className="font-bold text-sm text-slate-900 dark:text-white leading-snug break-words">
                           {p.name}
                         </div>
-                        <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400">
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-slate-400">
                           {cat && (
-                            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium text-[10px]">
                               {formatCategoryName(cat.name, lang)}
                             </span>
                           )}
-                          <span className="font-mono text-[10px] text-slate-400 truncate">
+                          <span className="font-mono text-[10px] text-slate-400">
                             {p.barcode}
                           </span>
                         </div>
@@ -546,7 +551,7 @@ export const ProductsView: React.FC = () => {
                     </div>
 
                     {/* Stock status badge */}
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold shrink-0 ${
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold shrink-0 self-start ${
                       isOut
                         ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
                         : isLow
@@ -557,55 +562,55 @@ export const ProductsView: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Middle row: Financial Metrics */}
-                  <div className="grid grid-cols-3 gap-2 py-2.5 my-2.5 border-y border-slate-100 dark:border-slate-800/80 text-xs">
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-medium">{lang === 'ar' ? 'سعر الشراء' : "Prix d'achat"}</div>
-                      <div className="font-semibold text-slate-600 dark:text-slate-300 mt-0.5">
+                  {/* Middle row: Financial Metrics in a dedicated neat box */}
+                  <div className="bg-slate-50/80 dark:bg-slate-800/50 rounded-2xl p-2.5 grid grid-cols-3 gap-1 text-center text-xs border border-slate-100 dark:border-slate-800/80">
+                    <div className="px-1">
+                      <div className="text-[10px] text-slate-400 font-medium truncate">{lang === 'ar' ? 'سعر الشراء' : "Prix d'achat"}</div>
+                      <div className="font-semibold text-slate-700 dark:text-slate-200 mt-0.5 text-xs truncate">
                         {formatCurrency(p.purchase_price)}
                       </div>
                     </div>
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-medium">{lang === 'ar' ? 'سعر البيع' : 'Prix de vente'}</div>
-                      <div className="font-bold text-teal-600 dark:text-teal-400 mt-0.5">
+                    <div className="px-1 border-x border-slate-200/60 dark:border-slate-700/60">
+                      <div className="text-[10px] text-slate-400 font-medium truncate">{lang === 'ar' ? 'سعر البيع' : 'Prix de vente'}</div>
+                      <div className="font-bold text-teal-600 dark:text-teal-400 mt-0.5 text-xs truncate">
                         {formatCurrency(p.sale_price)}
                       </div>
                     </div>
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-medium">{lang === 'ar' ? 'الربح المتوقع' : 'Bénéfice prévu'}</div>
-                      <div className={`font-bold mt-0.5 ${margin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    <div className="px-1">
+                      <div className="text-[10px] text-slate-400 font-medium truncate">{lang === 'ar' ? 'الربح المتوقع' : 'Bénéfice prévu'}</div>
+                      <div className={`font-bold mt-0.5 text-xs truncate ${margin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {margin > 0 ? `+${formatCurrency(margin)}` : margin < 0 ? `-${formatCurrency(Math.abs(margin))}` : formatCurrency(0)}
                       </div>
                     </div>
                   </div>
 
                   {/* Bottom row: Action Buttons */}
-                  <div className="flex items-center justify-between pt-0.5">
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
                     <button
                       onClick={() => {
                         setAdjustModalProduct(p);
                         setCountedQty(p.current_stock.toString());
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/50 hover:bg-teal-100 text-teal-700 dark:text-teal-300 font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 text-teal-700 dark:text-teal-300 font-bold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-2xs"
                     >
-                      <History className="w-3.5 h-3.5" />
+                      <History className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                       <span>{lang === 'ar' ? 'جرد المخزون' : 'Inventaire'}</span>
                     </button>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => handleOpenEdit(p)}
-                        className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                        className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition active:scale-95 cursor-pointer"
                         title={lang === 'ar' ? 'تعديل السلعة' : 'Modifier'}
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
+                        <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteProduct(p)}
-                        className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-600 transition cursor-pointer"
+                        className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-600 transition active:scale-95 cursor-pointer"
                         title={lang === 'ar' ? 'حذف' : 'Supprimer'}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -726,8 +731,8 @@ export const ProductsView: React.FC = () => {
 
           {/* Pagination Navigation Bar */}
           {totalPages > 1 && (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
-              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-3.5 sm:p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 overflow-hidden">
+              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium text-center sm:text-start">
                 {lang === 'ar' ? (
                   <>
                     عرض <span className="font-bold text-slate-800 dark:text-slate-200">{(currentPage - 1) * itemsPerPage + 1}</span> إلى{' '}
@@ -743,7 +748,7 @@ export const ProductsView: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}

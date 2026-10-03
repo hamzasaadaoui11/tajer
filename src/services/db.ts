@@ -343,11 +343,11 @@ class LocalDatabase {
       this.set('branches', branches);
       this.set('users', users);
 
-      // Start with clean empty tables by default as requested
-      this.set('categories', []);
-      this.set('suppliers', []);
-      this.set('customers', []);
-      this.set('products', []);
+      // Only initialize empty tables if they don't already have data
+      if (this.get('categories').length === 0) this.set('categories', []);
+      if (this.get('suppliers').length === 0) this.set('suppliers', []);
+      if (this.get('customers').length === 0) this.set('customers', []);
+      if (this.get('products').length === 0) this.set('products', []);
 
       // Initial cash balance
       const initialCash: CashTransaction = {
@@ -519,13 +519,11 @@ class LocalDatabase {
 
   // --- Products ---
   public getProducts(businessId?: string, branchId?: string): Product[] {
-    let all = this.get<Product>('products');
-    if (businessId) {
-      all = all.filter(p => !p.business_id || p.business_id === businessId);
-      // Auto-heal any products missing business_id so they sync cleanly
+    const all = this.get<Product>('products');
+    if (businessId && all.length > 0) {
       let healed = false;
       for (const p of all) {
-        if (!p.business_id) {
+        if (!p.business_id || p.business_id !== businessId) {
           p.business_id = businessId;
           healed = true;
         }

@@ -274,12 +274,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           db.saveBusiness(restored);
           db.setOnboardingComplete(true);
 
-          // Clear pre-seeded local tables since they are returning users and should pull a clean slate from cloud
-          db.set('products', []);
-          db.set('categories', []);
-          db.set('cash_transactions', []);
-          db.set('suppliers', []);
-          db.set('customers', []);
+          // Preserve existing local tables; only initialize if empty
+          if (db.get('products').length === 0) db.set('products', []);
+          if (db.get('categories').length === 0) db.set('categories', []);
+          if (db.get('cash_transactions').length === 0) db.set('cash_transactions', []);
+          if (db.get('suppliers').length === 0) db.set('suppliers', []);
+          if (db.get('customers').length === 0) db.set('customers', []);
 
           // Restore branches if any
           try {
@@ -359,6 +359,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 setIsOnboardingComplete(res.completed);
                 setIsAuthenticated(true);
                 setIsAuthChecking(false);
+                db.clearCache();
+                setDataVersion(v => v + 1);
                 // Immediately sync all remote data to local storage and update views
                 syncEngine.syncAll().then(syncRes => {
                   if (syncRes.success || syncRes.processed > 0) {
@@ -406,6 +408,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           db.cleanupDemoContacts(res.restoredBusiness?.id || tenantInit.business.id);
           setIsOnboardingComplete(res.completed);
           setIsAuthenticated(true);
+          db.clearCache();
+          setDataVersion(v => v + 1);
           syncEngine.syncAll().then(syncRes => {
             if (syncRes.success || syncRes.processed > 0) {
               setDataVersion(v => v + 1);

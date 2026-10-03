@@ -706,37 +706,27 @@ class SyncEngine {
         console.warn('Pull categories notice:', e);
       }
 
-      // 2.2 Pull Products & Delete any removed on other devices
+      // 2.2 Pull Products & Merge safely without deleting valid local products
       try {
+        const candidateBizIds = Array.from(new Set([
+          bizId,
+          db.getTenantId(),
+          bizId.startsWith('biz-') ? bizId.replace('biz-', '') : `biz-${bizId}`
+        ])).filter(Boolean);
+
         const { data: remoteProducts, error: prodPullErr } = await supabase
           .from('products')
           .select('*')
-          .eq('business_id', bizId);
+          .in('business_id', candidateBizIds);
 
         if (!prodPullErr && remoteProducts) {
           const remoteIds = new Set<string>((remoteProducts as any[]).map((rp: any) => rp.id as string));
-          const pendingProdCreates = new Set(db.getPendingCreates('products'));
           const tombstones = new Set(db.getTombstones('products'));
           const pendingDeletes = new Set(db.getDeleteQueue('products'));
-          const syncedProdIds = new Set(db.getSyncedIds('products'));
 
-          // Filter local products: remove if deleted on another device, deactivated, or tombstoned
+          // Keep all existing local products! Never delete products unless user explicitly deleted them locally
           const localProds = db.getProducts(bizId);
-          const filteredLocal = localProds.filter(p => {
-            if (pendingDeletes.has(p.id) || tombstones.has(p.id) || p.is_active === false) return false;
-            if (remoteIds.has(p.id)) return true;
-            
-            // If never synced to cloud, it is a new local product created on this device! Always keep it!
-            const wasSynced = syncedProdIds.has(p.id);
-            if (!wasSynced) return true;
-
-            // If it was in the cloud before and now absent, it was deleted on another device!
-            db.addToTombstones('products', p.id);
-            db.removePendingCreate('products', p.id);
-            db.removeSyncedId('products', p.id);
-            processed++;
-            return false;
-          });
+          const filteredLocal = localProds.filter(p => !pendingDeletes.has(p.id) && !tombstones.has(p.id) && p.is_active !== false);
 
           if (filteredLocal.length !== localProds.length) {
             db.set('products', filteredLocal);
@@ -775,7 +765,7 @@ class SyncEngine {
 
             db.saveProduct({
               id: rp.id,
-              business_id: rp.business_id,
+              business_id: rp.business_id || bizId,
               branch_id: rp.branch_id || branchId,
               category_id: rp.category_id,
               barcode: rp.barcode || '',
@@ -796,7 +786,9 @@ class SyncEngine {
             }, 'مزامنة السحابة', true);
           }
 
-          db.setSyncedIds('products', Array.from(remoteIds));
+          const currentSynced = db.getSyncedIds('products');
+          const allSynced = Array.from(new Set([...currentSynced, ...remoteIds]));
+          db.setSyncedIds('products', allSynced);
         }
       } catch (e) {
         console.warn('Pull products notice:', e);
