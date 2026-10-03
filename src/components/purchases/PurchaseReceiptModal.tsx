@@ -19,6 +19,7 @@ import { convertNumberToArabicWords, convertNumberToFrenchWords } from '../commo
 import { thermalPrinterService } from '../../services/thermalPrinter';
 import { ThermalPrinterGuideModal } from '../common/ThermalPrinterGuideModal';
 import { MobilePrintOptionsModal } from '../common/MobilePrintOptionsModal';
+import { ReceiptImageModal } from '../common/ReceiptImageModal';
 
 interface PurchaseReceiptModalProps {
   purchase: Purchase | null;
@@ -32,13 +33,14 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
   onClose
 }) => {
   const { business, lang } = useApp();
-  const [paperFormat, setPaperFormat] = useState<'A4' | '80mm'>('A4');
+  const [paperFormat, setPaperFormat] = useState<'80mm' | '58mm' | 'A4'>('80mm');
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [a4Scale, setA4Scale] = useState(0.45);
 
   // Bluetooth & Mobile Printing State
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [isBtPrinting, setIsBtPrinting] = useState(false);
   const [btSuccess, setBtSuccess] = useState(false);
 
@@ -51,38 +53,28 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
     const printEl = document.getElementById('printable-purchase-receipt');
     if (!printEl) return;
 
+    if (isMobile || isStandalone || !isWebBtSupported) {
+      setIsMobileOptionsOpen(true);
+      return;
+    }
+
     setIsBtPrinting(true);
     setBtSuccess(false);
     try {
-      const res = await thermalPrinterService.printReceiptViaBluetooth(printEl, '80mm');
+      const res = await thermalPrinterService.printReceiptViaBluetooth(
+        printEl,
+        paperFormat === '58mm' ? '58mm' : '80mm'
+      );
       if (res.success) {
         setBtSuccess(true);
         setTimeout(() => setBtSuccess(false), 3000);
       } else {
-        if (isMobile || isStandalone || !isWebBtSupported) {
-          setIsMobileOptionsOpen(true);
-        } else {
-          alert(res.error || (lang === 'ar' ? 'تعذر الاتصال بالطابعة عبر البلوتوث' : 'Erreur de connexion Bluetooth'));
-        }
+        setIsMobileOptionsOpen(true);
       }
     } catch (e: any) {
-      if (isMobile || isStandalone) {
-        setIsMobileOptionsOpen(true);
-      } else {
-        alert(e?.message || (lang === 'ar' ? 'حدث خطأ أثناء الاتصال' : 'Erreur'));
-      }
+      setIsMobileOptionsOpen(true);
     } finally {
       setIsBtPrinting(false);
-    }
-  };
-
-  const handleRawBTPrint = async () => {
-    const printEl = document.getElementById('printable-purchase-receipt');
-    if (!printEl) return;
-    try {
-      await thermalPrinterService.printReceiptViaRawBT(printEl, '80mm');
-    } catch (e: any) {
-      alert(e?.message || 'Erreur RawBT');
     }
   };
 
@@ -90,19 +82,19 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
     const printEl = document.getElementById('printable-purchase-receipt');
     if (!printEl || !purchase) return;
     const invNum = purchase.invoice_number || purchase.id.slice(-6);
-    await thermalPrinterService.shareReceiptAsImage(
-      printEl,
-      lang === 'ar' ? `شراء-${invNum}` : `Achat-${invNum}`,
-      '80mm'
-    );
+    try {
+      const canvas = await thermalPrinterService.renderElementToCanvas(
+        printEl,
+        paperFormat === '58mm' ? '58mm' : '80mm'
+      );
+      const dataUrl = canvas.toDataURL('image/png');
+      setPreviewImageUrl(dataUrl);
+    } catch (e: any) {
+      alert(e?.message || (lang === 'ar' ? 'فشل توليد صورة الفاتورة' : 'Erreur'));
+    }
   };
 
   const handleThermalPrint = async () => {
-    if (isStandalone && isAndroid) {
-      await handleRawBTPrint();
-      return;
-    }
-
     if (!isWebBtSupported) {
       setIsMobileOptionsOpen(true);
       return;
@@ -240,7 +232,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
         font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
       }
       @page {
-        size: ${paperFormat === '80mm' ? '80mm auto' : 'A4 portrait'};
+        size: ${paperFormat === '58mm' ? '58mm 210mm' : paperFormat === '80mm' ? '80mm 297mm' : 'A4'};
         margin: 0 !important;
       }
       @media print {
@@ -251,14 +243,14 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
           margin: 0 !important;
           padding: 0 !important;
           background: #ffffff !important;
-          width: ${paperFormat === 'A4' ? '210mm' : '80mm'} !important;
+          width: ${paperFormat === 'A4' ? '210mm' : paperFormat === '58mm' ? '58mm' : '80mm'} !important;
         }
         #printable-purchase-receipt {
-          width: ${paperFormat === 'A4' ? '210mm' : '80mm'} !important;
-          max-width: ${paperFormat === 'A4' ? '210mm' : '80mm'} !important;
+          width: ${paperFormat === 'A4' ? '210mm' : paperFormat === '58mm' ? '58mm' : '80mm'} !important;
+          max-width: ${paperFormat === 'A4' ? '210mm' : paperFormat === '58mm' ? '58mm' : '80mm'} !important;
           min-height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
           height: ${paperFormat === 'A4' ? '297mm' : 'auto'} !important;
-          padding: ${paperFormat === 'A4' ? '14mm 16mm' : '4mm'} !important;
+          padding: ${paperFormat === 'A4' ? '14mm 16mm' : paperFormat === '80mm' ? '4mm' : '3mm'} !important;
           display: ${paperFormat === 'A4' ? 'flex' : 'block'} !important;
           flex-direction: ${paperFormat === 'A4' ? 'column' : 'initial'} !important;
           justify-content: ${paperFormat === 'A4' ? 'space-between' : 'initial'} !important;
@@ -403,7 +395,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-2 sm:p-4 overflow-y-auto">
       {/* Injected Print Stylesheet for A4 and Thermal */}
       <style>{`
         @media print {
@@ -454,28 +446,39 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
 
         {/* Paper Format Selector Tabs & Help */}
         <div className="p-3 bg-slate-100 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 no-print">
-          <div className="flex items-center gap-2 mx-auto sm:mx-0">
-            <button
-              onClick={() => setPaperFormat('A4')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                paperFormat === 'A4'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>{lang === 'ar' ? 'ورق قياسي A4 (Facture A4)' : 'Standard A4'}</span>
-            </button>
+          <div className="flex items-center gap-1.5 mx-auto sm:mx-0">
             <button
               onClick={() => setPaperFormat('80mm')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                 paperFormat === '80mm'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
               }`}
             >
               <Printer className="w-4 h-4" />
-              <span>{lang === 'ar' ? 'وصل حراري 80mm' : 'Thermique 80mm'}</span>
+              <span>{lang === 'ar' ? 'حراري 80mm' : 'Thermique 80mm'}</span>
+            </button>
+            <button
+              onClick={() => setPaperFormat('58mm')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                paperFormat === '58mm'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <Printer className="w-4 h-4" />
+              <span>{lang === 'ar' ? 'حراري 58mm' : 'Thermique 58mm'}</span>
+            </button>
+            <button
+              onClick={() => setPaperFormat('A4')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                paperFormat === 'A4'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>{lang === 'ar' ? 'ورق قياسي A4' : 'Standard A4'}</span>
             </button>
           </div>
 
@@ -782,8 +785,8 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
             /* 80mm Thermal Receipt */
             <div
               id="printable-purchase-receipt"
-              style={{ width: '80mm', maxWidth: '80mm' }}
-              className="bg-white text-slate-900 p-4 font-mono text-xs leading-normal border border-slate-200 shadow-md box-border mx-auto"
+              style={{ width: paperFormat === '58mm' ? '58mm' : '80mm', maxWidth: paperFormat === '58mm' ? '58mm' : '80mm' }}
+              className="bg-white text-slate-900 p-3 font-mono text-xs leading-normal border border-slate-200 shadow-md box-border mx-auto"
             >
               <div className="text-center pb-2 border-b border-dashed border-slate-300">
                 <h2 className="font-extrabold text-base tracking-tight">{business.name}</h2>
@@ -958,11 +961,11 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
         isOpen={isMobileOptionsOpen}
         onClose={() => setIsMobileOptionsOpen(false)}
         onDirectBluetooth={isWebBtSupported ? handleBluetoothPrint : undefined}
-        onRawBTPrint={handleRawBTPrint}
         onSystemPrint={handlePrint}
         onShareImage={handleShareImage}
         lang={lang}
         paperFormat={paperFormat as any}
+        setPaperFormat={setPaperFormat as any}
         isBtPrinting={isBtPrinting}
       />
 
@@ -970,6 +973,15 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
       <ThermalPrinterGuideModal
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
+        lang={lang}
+      />
+
+      {/* Receipt Image Preview & Share Modal */}
+      <ReceiptImageModal
+        isOpen={!!previewImageUrl}
+        onClose={() => setPreviewImageUrl(null)}
+        imageDataUrl={previewImageUrl || ''}
+        title={lang === 'ar' ? `شراء-${purchase?.invoice_number || ''}` : `Achat-${purchase?.invoice_number || ''}`}
         lang={lang}
       />
     </div>

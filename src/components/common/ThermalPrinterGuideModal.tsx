@@ -57,7 +57,7 @@ export const ThermalPrinterGuideModal: React.FC<Props> = ({ isOpen, onClose, lan
   const isWebBtSupported = thermalPrinterService.isWebBluetoothSupported();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950 p-3 sm:p-4 overflow-y-auto">
       <div 
         className={`w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 duration-150 my-auto`}
       >
@@ -87,20 +87,7 @@ export const ThermalPrinterGuideModal: React.FC<Props> = ({ isOpen, onClose, lan
         {/* Content */}
         <div className="p-4 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto text-xs sm:text-sm text-slate-700 dark:text-slate-300">
           
-          {/* Standalone PWA Notice */}
-          <div className="p-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900/40 text-teal-950 dark:text-teal-200 flex items-start gap-2.5">
-            <Smartphone className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <span className="font-bold block">
-                {lang === 'ar' ? 'ملاحظة مهمة لمستخدمي التطبيق على الشاشة الرئيسية (Add to Home screen):' : 'Note pour l\'application ajoutée à l\'écran d\'accueil :'}
-              </span>
-              <p className="text-[11px] leading-relaxed text-teal-900/90 dark:text-teal-200/90">
-                {lang === 'ar'
-                  ? 'عند تثبيت التطبيق على شاشة الهاتف، يمنع نظام الهاتف تشغيل نافذة Web Bluetooth التابعة للمتصفح. الحل الأفضل والأسهل 100% للطباعة المباشرة من داخل التطبيق دون الحاجة للمتصفح هو استخدام تطبيق RawBT المجاني؛ أو يمكنك فتح الفاتورة في متصفح Google Chrome.'
-                  : 'Dans l\'application installée sur l\'écran d\'accueil (PWA), Web Bluetooth peut être restreint par le système. Utilisez l\'application gratuite RawBT pour imprimer directement en un clic sans ouvrir de navigateur.'}
-              </p>
-            </div>
-          </div>
+
 
           {/* Why phone didn't connect alert */}
           <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
@@ -186,34 +173,7 @@ export const ThermalPrinterGuideModal: React.FC<Props> = ({ isOpen, onClose, lan
             )}
           </div>
 
-          {/* Method 2: RawBT App (Best & Most Stable for Android) */}
-          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-teal-600 text-white font-black text-xs flex items-center justify-center shrink-0">2</span>
-              <h4 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                <Smartphone className="w-4 h-4 text-emerald-600" />
-                <span>{lang === 'ar' ? 'الطريقة الثانية: تطبيق RawBT المجاني (الأفضل والأضمن لهواتف أندرويد)' : 'Méthode 2 : Application gratuite RawBT (Android)'}</span>
-              </h4>
-            </div>
 
-            <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-              {lang === 'ar'
-                ? 'تطبيق RawBT هو المشغل الرسمي الأول والمعتمد لطابعات البلوتوث الحرارية في المغرب والعالم. بمجرد تثبيته وربطه بالطابعة مرة واحدة، يمكنك الطباعة بنقرة زر واحدة من تطبيق تاجر.'
-                : 'RawBT est le pilote universel le plus stable pour les imprimantes thermiques sur Android. Une fois configuré, vous imprimez en un seul clic.'}
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-2 pt-1">
-              <a
-                href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition text-center shadow-xs"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>{lang === 'ar' ? 'تحميل تطبيق RawBT من متجر Google Play' : 'Télécharger RawBT sur Google Play'}</span>
-              </a>
-            </div>
-          </div>
 
           {/* Troubleshooting Checklist */}
           <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 space-y-2.5">

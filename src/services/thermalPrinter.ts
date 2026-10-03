@@ -88,7 +88,7 @@ export class ThermalPrinterService {
       if (this.isStandalone()) {
         return {
           success: false,
-          error: 'في تطبيق الشاشة الرئيسية (PWA)، يمنع نظام الهاتف تشغيل خاصية Web Bluetooth المباشرة للمتصفح. يمكنك الطباعة فوراً بنقرة واحدة عبر تطبيق RawBT، أو عبر نظام الهاتف، أو فتح الفاتورة في متصفح Google Chrome.'
+          error: 'في تطبيق الشاشة الرئيسية (PWA)، يمنع نظام الهاتف تشغيل خاصية Web Bluetooth المباشرة للمتصفح. يرجى استخدام طباعة نظام الهاتف (PDF) أو فتح الفاتورة في متصفح Google Chrome.'
         };
       }
       if (this.isIOS()) {
@@ -99,7 +99,7 @@ export class ThermalPrinterService {
       }
       return {
         success: false,
-        error: 'متصفحك لا يدعم خاصية Web Bluetooth. يرجى استخدام متصفح Google Chrome على هاتف أندرويد أو جهاز الكمبيوتر، أو الطباعة المباشرة عبر RawBT.'
+        error: 'متصفحك لا يدعم خاصية Web Bluetooth. يرجى استخدام متصفح Google Chrome على هاتف أندرويد أو جهاز الكمبيوتر.'
       };
     }
 
@@ -352,23 +352,30 @@ export class ThermalPrinterService {
     const clone = element.cloneNode(true) as HTMLElement;
     clone.style.width = `${targetWidth}px`;
     clone.style.maxWidth = `${targetWidth}px`;
+    clone.style.minWidth = `${targetWidth}px`;
     clone.style.background = '#ffffff';
     clone.style.color = '#000000';
-    clone.style.position = 'fixed';
-    clone.style.left = '0';
+    clone.style.position = 'absolute';
+    clone.style.left = '-9999px';
     clone.style.top = '0';
-    clone.style.opacity = '0.001';
-    clone.style.zIndex = '-9999';
-    clone.style.pointerEvents = 'none';
+    clone.style.zIndex = '99999';
+    clone.style.padding = '16px';
+    clone.style.boxSizing = 'border-box';
     document.body.appendChild(clone);
 
-    await new Promise(r => setTimeout(r, 150));
+    // Force all child elements to have legible black text
+    const allEls = clone.querySelectorAll('*');
+    allEls.forEach((el: any) => {
+      el.style.color = '#000000';
+    });
+
+    await new Promise(r => setTimeout(r, 200));
 
     try {
       const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
-        allowTaint: false,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         width: targetWidth,
         windowWidth: targetWidth,
@@ -417,50 +424,10 @@ export class ThermalPrinterService {
     }
   }
 
-  /**
-   * One-Click Print via RawBT (Free Android Thermal Driver)
-   * Supports direct Android Intent with Play Store fallback if not yet installed.
-   */
-  public async printReceiptViaRawBT(
-    element: HTMLElement,
-    paperWidth: '58mm' | '80mm' = '80mm'
-  ): Promise<{ success: boolean; error?: string }> {
-    try {
-      const canvas = await this.renderElementToCanvas(element, paperWidth);
-      const dataUrl = canvas.toDataURL('image/png');
-      const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
 
-      // Android Intent with Play Store fallback
-      const playStoreFallback = encodeURIComponent('https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter');
-      const intentUrl = `intent:data:image/png;base64,${base64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;S.browser_fallback_url=${playStoreFallback};end;`;
-
-      const link = document.createElement('a');
-      link.href = intentUrl;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        if (link.parentNode) link.parentNode.removeChild(link);
-      }, 1000);
-
-      return { success: true };
-    } catch (e: any) {
-      console.error('RawBT print error, trying rawbt: scheme:', e);
-      try {
-        const canvas = await this.renderElementToCanvas(element, paperWidth);
-        const dataUrl = canvas.toDataURL('image/png');
-        const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
-        window.location.href = `rawbt:data:image/png;base64,${base64}`;
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, error: err?.message || 'تعذر تشغيل تطبيق RawBT' };
-      }
-    }
-  }
 
   /**
-   * Share ticket directly as a high resolution PNG image (Web Share API)
-   * Allows sharing to Bluetooth devices, WhatsApp, or any printer apps installed on Android/iOS.
+   * Share ticket directly as a high resolution PNG image (Web Share API with mobile fallback preview window)
    */
   public async shareReceiptAsImage(
     element: HTMLElement,
@@ -469,33 +436,73 @@ export class ThermalPrinterService {
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const canvas = await this.renderElementToCanvas(element, paperWidth);
+      const dataUrl = canvas.toDataURL('image/png');
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error('فشل إنشاء صورة الفاتورة');
 
       const file = new File([blob], `ticket-${Date.now()}.png`, { type: 'image/png' });
 
       const nav: any = navigator;
+      let shared = false;
+
+      // Try Web Share API with files if available
       if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
-        await nav.share({
-          title,
-          text: title,
-          files: [file],
-        });
-        return { success: true };
-      } else {
-        // Fallback: download PNG image
-        const url = URL.createObjectURL(blob);
+        try {
+          await nav.share({
+            title,
+            text: title,
+            files: [file],
+          });
+          shared = true;
+        } catch (shareErr: any) {
+          if (shareErr?.name === 'AbortError') return { success: true };
+          console.warn('Native share with files failed, trying fallback:', shareErr);
+        }
+      }
+
+      // If native file share wasn't used or failed, open preview window for mobile users to save image
+      if (!shared) {
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `ticket-${Date.now()}.png`;
+        a.href = dataUrl;
+        a.download = `facture-${Date.now()}.png`;
+        a.target = '_blank';
         document.body.appendChild(a);
         a.click();
         setTimeout(() => {
           document.body.removeChild(a);
-          URL.revokeObjectURL(url);
         }, 1000);
-        return { success: true };
+
+        try {
+          const newWindow = window.open();
+          if (newWindow) {
+            newWindow.document.write(`
+              <!DOCTYPE html>
+              <html dir="rtl" lang="ar">
+              <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>${title}</title>
+                <style>
+                  body { margin: 0; background: #0f172a; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; color: white; padding: 20px; }
+                  img { max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); background: white; margin-bottom: 20px; }
+                  .btn { background: #0d9488; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; text-decoration: none; display: inline-block; }
+                </style>
+              </head>
+              <body>
+                <p style="margin-bottom: 15px; font-size: 14px; color: #cbd5e1; text-align: center;">اضغط مطولاً على الصورة لحفظها في هاتفك، أو اضغط الزر أدناه:</p>
+                <img src="${dataUrl}" alt="${title}" />
+                <a href="${dataUrl}" download="facture.png" class="btn">تحميل الصورة في الهاتف</a>
+              </body>
+              </html>
+            `);
+            newWindow.document.close();
+          }
+        } catch (openErr) {
+          console.warn('Could not open preview window:', openErr);
+        }
       }
+
+      return { success: true };
     } catch (e: any) {
       if (e?.name === 'AbortError') return { success: true };
       console.error('Share ticket image error:', e);

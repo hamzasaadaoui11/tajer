@@ -19,11 +19,11 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onDirectBluetooth?: () => void;
-  onRawBTPrint: () => void;
   onSystemPrint: () => void;
   onShareImage: () => void;
   lang?: Language;
   paperFormat?: '58mm' | '80mm' | 'A4';
+  setPaperFormat?: (format: '58mm' | '80mm' | 'A4') => void;
   isBtPrinting?: boolean;
 }
 
@@ -31,11 +31,11 @@ export const MobilePrintOptionsModal: React.FC<Props> = ({
   isOpen,
   onClose,
   onDirectBluetooth,
-  onRawBTPrint,
   onSystemPrint,
   onShareImage,
   lang = 'ar',
   paperFormat = '80mm',
+  setPaperFormat,
   isBtPrinting = false
 }) => {
   const [sharing, setSharing] = useState(false);
@@ -59,7 +59,7 @@ export const MobilePrintOptionsModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950 p-3 sm:p-4 overflow-y-auto">
       <div 
         className={`w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${
           lang === 'ar' ? 'text-right' : 'text-left'
@@ -95,77 +95,49 @@ export const MobilePrintOptionsModal: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Info Banner for Standalone PWA */}
-        {isStandalone && (
-          <div className="mx-4 mt-4 p-3 rounded-2xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900/40 text-teal-950 dark:text-teal-200 text-xs leading-relaxed flex items-start gap-2.5">
-            <Sparkles className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
-            <div>
-              <strong className="block font-bold">
-                {lang === 'ar' ? 'الطباعة المباشرة من تطبيق الشاشة الرئيسية:' : 'Impression directe depuis l\'application :'}
-              </strong>
-              <span>
-                {lang === 'ar'
-                  ? 'للطباعة بنقرة واحدة من داخل التطبيق دون فتح أي متصفح، استخدم الخيار الأول (RawBT)، فهو يتصل مباشرة بالطابعة عبر البلوتوث.'
-                  : 'Pour imprimer directement sans passer par un navigateur, utilisez la méthode RawBT.'}
-              </span>
+        {/* Paper Format Quick Selector */}
+        {setPaperFormat && (
+          <div className="px-4 py-3 bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              {lang === 'ar' ? 'مقاس التذكرة (Format):' : 'Format du ticket:'}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPaperFormat('80mm')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  paperFormat === '80mm'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                {lang === 'ar' ? 'حراري 80mm' : '80mm'}
+              </button>
+              <button
+                onClick={() => setPaperFormat('58mm')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  paperFormat === '58mm'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                {lang === 'ar' ? 'حراري 58mm' : '58mm'}
+              </button>
+              <button
+                onClick={() => setPaperFormat('A4')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  paperFormat === 'A4'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                A4
+              </button>
             </div>
           </div>
         )}
 
         {/* Options List */}
         <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
-
-          {/* Option 1: RawBT (Recommended for Android / PWA) */}
-          {isAndroid && (
-            <div className="p-3.5 rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2.5 transition">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                    <Smartphone className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-extrabold text-sm text-slate-900 dark:text-white">
-                        {lang === 'ar' ? 'الطباعة الفورية (تطبيق RawBT)' : 'Impression directe RawBT'}
-                      </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-white">
-                        {lang === 'ar' ? 'الأسهل والأضمن' : 'Recommandé'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                      {lang === 'ar' 
-                        ? 'يعمل مباشرة من داخل تطبيق الشاشة الرئيسية بنقرة واحدة مع جميع طابعات البلوتوث (58mm / 80mm)' 
-                        : 'Imprime directement depuis l\'application vers toute imprimante thermique Bluetooth'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => {
-                    onRawBTPrint();
-                    onClose();
-                  }}
-                  className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer active:scale-95"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>{lang === 'ar' ? 'طباعة التذكرة الآن' : 'Imprimer maintenant'}</span>
-                </button>
-
-                <a
-                  href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition"
-                  title={lang === 'ar' ? 'تثبيت تطبيق RawBT من متجر Google Play' : 'Installer RawBT'}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>{lang === 'ar' ? 'تثبيت RawBT' : 'Installer'}</span>
-                </a>
-              </div>
-            </div>
-          )}
 
           {/* Option 2: Web Bluetooth Direct Print (If supported or on desktop/Chrome) */}
           {onDirectBluetooth && isWebBtSupported && (

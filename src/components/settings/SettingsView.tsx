@@ -1058,22 +1058,7 @@ export const SettingsView: React.FC = () => {
                 : 'Connectez directement vos imprimantes thermiques Bluetooth (58mm ou 80mm) et imprimez vos tickets.'}
             </p>
 
-            {/* Standalone PWA notice */}
-            {thermalPrinterService.isStandalone() && (
-              <div className="p-3 rounded-xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-teal-950 dark:text-teal-200 text-xs flex items-start gap-2">
-                <Sparkles className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <span className="font-bold block">
-                    {lang === 'ar' ? 'تطبيق الشاشة الرئيسية (PWA):' : 'Application installée (PWA) :'}
-                  </span>
-                  <p className="text-[11px] text-teal-900/90 dark:text-teal-200/90 leading-relaxed">
-                    {lang === 'ar'
-                      ? 'للطباعة بنقرة واحدة مباشرة من داخل التطبيق المثبت على هاتفك دون فتح متصفح خارجي، يرجى استخدام تطبيق RawBT المجاني.'
-                      : 'Pour imprimer directement sans passer par un navigateur, installez l\'application gratuite RawBT.'}
-                  </p>
-                </div>
-              </div>
-            )}
+
 
             {savedPrinter && (
               <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 flex items-center justify-between text-xs">
@@ -1107,18 +1092,7 @@ export const SettingsView: React.FC = () => {
                 )}
               </button>
 
-              {thermalPrinterService.isAndroid() && (
-                <a
-                  href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 font-bold text-xs flex items-center gap-1.5 transition"
-                >
-                  <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{lang === 'ar' ? 'تثبيت مشغل الطابعات RawBT' : 'Installer RawBT'}</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
+
 
               <button
                 type="button"

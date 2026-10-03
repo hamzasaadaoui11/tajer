@@ -18,6 +18,7 @@ import { generateSaleWhatsAppText, openWhatsApp } from '../../services/whatsapp'
 import { thermalPrinterService } from '../../services/thermalPrinter';
 import { ThermalPrinterGuideModal } from './ThermalPrinterGuideModal';
 import { MobilePrintOptionsModal } from './MobilePrintOptionsModal';
+import { ReceiptImageModal } from './ReceiptImageModal';
 
 // Arabic number to words converter for Moroccan Dirhams (MAD)
 export function convertNumberToArabicWords(amount: number): string {
@@ -214,6 +215,7 @@ export const ReceiptModal: React.FC = () => {
   // Mobile & Bluetooth Printing State
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [isBtPrinting, setIsBtPrinting] = useState(false);
   const [btSuccess, setBtSuccess] = useState(false);
 
@@ -226,6 +228,11 @@ export const ReceiptModal: React.FC = () => {
     const printEl = document.getElementById('printable-receipt');
     if (!printEl) return;
 
+    if (isMobile || isStandalone || !isWebBtSupported) {
+      setIsMobileOptionsOpen(true);
+      return;
+    }
+
     setIsBtPrinting(true);
     setBtSuccess(false);
     try {
@@ -237,35 +244,12 @@ export const ReceiptModal: React.FC = () => {
         setBtSuccess(true);
         setTimeout(() => setBtSuccess(false), 3000);
       } else {
-        // If failed due to lack of Web Bluetooth (like in standalone PWA or non-supported browser),
-        // gracefully present the Mobile Print Options Modal rather than a dead-end alert!
-        if (isMobile || isStandalone || !isWebBtSupported) {
-          setIsMobileOptionsOpen(true);
-        } else {
-          alert(res.error || (lang === 'ar' ? 'تعذر الاتصال بالطابعة عبر البلوتوث' : 'Erreur de connexion Bluetooth'));
-        }
+        setIsMobileOptionsOpen(true);
       }
     } catch (e: any) {
-      if (isMobile || isStandalone) {
-        setIsMobileOptionsOpen(true);
-      } else {
-        alert(e?.message || (lang === 'ar' ? 'حدث خطأ أثناء الاتصال' : 'Erreur'));
-      }
+      setIsMobileOptionsOpen(true);
     } finally {
       setIsBtPrinting(false);
-    }
-  };
-
-  const handleRawBTPrint = async () => {
-    const printEl = document.getElementById('printable-receipt');
-    if (!printEl) return;
-    try {
-      await thermalPrinterService.printReceiptViaRawBT(
-        printEl,
-        paperFormat === '58mm' ? '58mm' : '80mm'
-      );
-    } catch (e: any) {
-      alert(e?.message || 'Erreur RawBT');
     }
   };
 
@@ -273,25 +257,22 @@ export const ReceiptModal: React.FC = () => {
     const printEl = document.getElementById('printable-receipt');
     if (!printEl || !activeSaleReceipt) return;
     const invNum = activeSaleReceipt.invoice_number || activeSaleReceipt.id.slice(-6);
-    await thermalPrinterService.shareReceiptAsImage(
-      printEl,
-      lang === 'ar' ? `فاتورة-${invNum}` : `Facture-${invNum}`,
-      paperFormat === '58mm' ? '58mm' : '80mm'
-    );
+    try {
+      const canvas = await thermalPrinterService.renderElementToCanvas(
+        printEl,
+        paperFormat === '58mm' ? '58mm' : '80mm'
+      );
+      const dataUrl = canvas.toDataURL('image/png');
+      setPreviewImageUrl(dataUrl);
+    } catch (e: any) {
+      alert(e?.message || (lang === 'ar' ? 'فشل توليد صورة الفاتورة' : 'Erreur de génération d\'image'));
+    }
   };
 
   /**
    * Smart Thermal Print trigger:
-   * If in Home Screen PWA or without Web Bluetooth on Android:
-   * Uses RawBT direct intent which prints 100% directly without browser restrictions!
    */
   const handleThermalPrint = async () => {
-    if (isStandalone && isAndroid) {
-      // Direct print without opening Chrome
-      await handleRawBTPrint();
-      return;
-    }
-
     if (!isWebBtSupported) {
       setIsMobileOptionsOpen(true);
       return;
@@ -592,7 +573,7 @@ export const ReceiptModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-2 sm:p-4 overflow-y-auto">
       {/* Injected Print Stylesheet for Thermal and Standard A4 */}
       <style>{`
         @media print {
@@ -1153,11 +1134,11 @@ export const ReceiptModal: React.FC = () => {
         isOpen={isMobileOptionsOpen}
         onClose={() => setIsMobileOptionsOpen(false)}
         onDirectBluetooth={isWebBtSupported ? handleBluetoothPrint : undefined}
-        onRawBTPrint={handleRawBTPrint}
         onSystemPrint={handlePrint}
         onShareImage={handleShareImage}
         lang={lang}
         paperFormat={paperFormat as any}
+        setPaperFormat={setPaperFormat as any}
         isBtPrinting={isBtPrinting}
       />
 
@@ -1165,6 +1146,15 @@ export const ReceiptModal: React.FC = () => {
       <ThermalPrinterGuideModal
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
+        lang={lang}
+      />
+
+      {/* Receipt Image Preview & Share Modal */}
+      <ReceiptImageModal
+        isOpen={!!previewImageUrl}
+        onClose={() => setPreviewImageUrl(null)}
+        imageDataUrl={previewImageUrl || ''}
+        title={lang === 'ar' ? `فاتورة-${activeSaleReceipt?.invoice_number || ''}` : `Facture-${activeSaleReceipt?.invoice_number || ''}`}
         lang={lang}
       />
     </div>
