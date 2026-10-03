@@ -340,7 +340,7 @@ export class ThermalPrinterService {
   }
 
   /**
-   * Convert DOM Element to high resolution Canvas using html2canvas directly on the rendered element
+   * Convert DOM Element to high resolution Canvas using html2canvas with oklch color function sanitization
    */
   public async renderElementToCanvas(
     element: HTMLElement, 
@@ -348,8 +348,24 @@ export class ThermalPrinterService {
   ): Promise<HTMLCanvasElement> {
     const targetWidth = paperWidth === '58mm' ? 384 : 576;
     
+    // Create offscreen container clone to avoid oklch stylesheet parsing errors in html2canvas
+    const clone = element.cloneNode(true) as HTMLElement;
+    clone.style.width = `${targetWidth}px`;
+    clone.style.maxWidth = `${targetWidth}px`;
+    clone.style.background = '#ffffff';
+    clone.style.color = '#000000';
+    clone.style.position = 'fixed';
+    clone.style.left = '0';
+    clone.style.top = '0';
+    clone.style.opacity = '0.001';
+    clone.style.zIndex = '-9999';
+    clone.style.pointerEvents = 'none';
+    document.body.appendChild(clone);
+
+    await new Promise(r => setTimeout(r, 150));
+
     try {
-      const canvas = await html2canvas(element, {
+      const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
         allowTaint: false,
@@ -357,11 +373,23 @@ export class ThermalPrinterService {
         width: targetWidth,
         windowWidth: targetWidth,
         logging: false,
+        onclone: (doc) => {
+          const sheets = doc.querySelectorAll('style');
+          sheets.forEach(s => {
+            if (s.textContent && s.textContent.includes('oklch')) {
+              s.textContent = s.textContent.replace(/oklch\([^)]+\)/g, '#000000');
+            }
+          });
+        }
       });
       return canvas;
     } catch (e: any) {
       console.error('html2canvas render error:', e);
       throw new Error('فشل توليد صورة الفاتورة: ' + (e?.message || 'خطأ غير معروف'));
+    } finally {
+      if (clone.parentNode) {
+        document.body.removeChild(clone);
+      }
     }
   }
 
