@@ -21,12 +21,51 @@ import {
   ChevronLeft,
   ChevronDown
 } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { useApp, CartItem } from '../../context/AppContext';
 import { db } from '../../services/db';
 import { PaymentMethod, Customer, Sale, Product } from '../../types';
 import { playBeep } from '../../services/barcode';
 import { formatMAD, formatUnit } from '../../i18n/locales';
 import { syncEngine } from '../../services/sync';
+
+interface CartPriceInputProps {
+  item: CartItem;
+  updateCartPrice: (productId: string, unitPrice: number) => void;
+}
+
+const CartPriceInput: React.FC<CartPriceInputProps> = ({ item, updateCartPrice }) => {
+  const [textVal, setTextVal] = useState(item.unit_price.toString());
+
+  useEffect(() => {
+    setTextVal(item.unit_price.toString());
+  }, [item.unit_price]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={textVal}
+      onChange={e => {
+        const raw = e.target.value;
+        setTextVal(raw);
+        const parsed = parseFloat(raw.replace(',', '.'));
+        if (!isNaN(parsed)) {
+          updateCartPrice(item.product_id, parsed);
+        }
+      }}
+      onBlur={() => {
+        const parsed = parseFloat(textVal.replace(',', '.'));
+        if (isNaN(parsed)) {
+          setTextVal(item.unit_price.toString());
+        } else {
+          setTextVal(parsed.toString());
+          updateCartPrice(item.product_id, parsed);
+        }
+      }}
+      className="w-20 px-1.5 py-0.5 rounded-lg border border-teal-500 bg-white dark:bg-slate-900 text-xs font-extrabold text-teal-700 dark:text-teal-300 shadow-xs"
+    />
+  );
+};
 
 export const POSView: React.FC = () => {
   const {
@@ -75,7 +114,10 @@ export const POSView: React.FC = () => {
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
 
   // Products and Categories
-  const products = useMemo(() => db.getProducts(business.id, branch.id), [business.id, branch.id, dataVersion]);
+  const products = useMemo(() => {
+    const list = db.getProducts(business.id, branch.id);
+    return [...list].sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
+  }, [business.id, branch.id, dataVersion]);
   const categories = useMemo(() => db.getCategories(business.id), [business.id, dataVersion]);
   const customers = useMemo(() => db.getCustomers(business.id), [business.id, dataVersion]);
 
@@ -489,14 +531,7 @@ export const POSView: React.FC = () => {
                     {item.product_name}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={item.unit_price}
-                      onChange={e => updateCartPrice(item.product_id, parseFloat(e.target.value) || 0)}
-                      className="w-18 px-1.5 py-0.5 rounded-lg border border-teal-500 bg-white dark:bg-slate-900 text-xs font-extrabold text-teal-700 dark:text-teal-300 shadow-xs"
-                      title={lang === 'ar' ? 'تعديل سعر البيع لهذه الفاتورة فقط' : 'Modifier le prix de vente pour cette facture'}
-                    />
+                    <CartPriceInput item={item} updateCartPrice={updateCartPrice} />
                     <span className="text-[10px] text-slate-500">
                       × {item.quantity} = <strong className="text-slate-900 dark:text-white">{formatCurrency(item.total)}</strong>
                     </span>

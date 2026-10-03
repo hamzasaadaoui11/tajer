@@ -32,7 +32,7 @@ export type AppView =
   | 'settings'
   | 'onboarding';
 
-interface CartItem extends SaleItem {
+export interface CartItem extends SaleItem {
   max_stock: number;
 }
 
