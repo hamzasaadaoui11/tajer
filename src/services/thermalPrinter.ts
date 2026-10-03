@@ -366,13 +366,15 @@ export class ThermalPrinterService {
     targetEl.style.marginBottom = computed.marginBottom;
     targetEl.style.marginLeft = computed.marginLeft;
 
-    // Typography
-    targetEl.style.fontFamily = computed.fontFamily;
+    // Typography (Enforce Cairo Arabic font, never break Arabic ligatures with letterSpacing)
+    targetEl.style.fontFamily = computed.fontFamily.includes('Cairo')
+      ? computed.fontFamily
+      : "'Cairo', system-ui, -apple-system, sans-serif";
     targetEl.style.fontSize = computed.fontSize;
     targetEl.style.fontWeight = computed.fontWeight;
     targetEl.style.lineHeight = computed.lineHeight;
     targetEl.style.textAlign = computed.textAlign;
-    targetEl.style.letterSpacing = computed.letterSpacing;
+    targetEl.style.letterSpacing = 'normal';
     targetEl.style.whiteSpace = computed.whiteSpace;
     targetEl.style.direction = computed.direction;
 
@@ -480,8 +482,15 @@ export class ThermalPrinterService {
         allowTaint: true,
         logging: false,
         onclone: (clonedDoc) => {
-          // Remove external stylesheets to eliminate any oklch color parsing errors
-          const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+          // Keep font links (Google Fonts / Cairo), remove only app stylesheets with oklch
+          const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]');
+          links.forEach(l => {
+            const href = l.getAttribute('href') || '';
+            if (!href.includes('fonts.googleapis.com') && !href.includes('fonts.gstatic.com')) {
+              l.remove();
+            }
+          });
+          const styles = clonedDoc.querySelectorAll('style');
           styles.forEach(s => s.remove());
         }
       });

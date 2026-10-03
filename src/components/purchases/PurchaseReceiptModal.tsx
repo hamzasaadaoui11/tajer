@@ -786,11 +786,16 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
             /* 80mm Thermal Receipt */
             <div
               id="printable-purchase-receipt"
-              style={{ width: paperFormat === '58mm' ? '58mm' : '80mm', maxWidth: paperFormat === '58mm' ? '58mm' : '80mm' }}
-              className="bg-white text-slate-900 p-3 font-mono text-xs leading-normal border border-slate-200 shadow-md box-border mx-auto"
+              dir={lang === 'ar' ? 'rtl' : 'ltr'}
+              style={{ 
+                width: paperFormat === '58mm' ? '58mm' : '80mm', 
+                maxWidth: paperFormat === '58mm' ? '58mm' : '80mm',
+                fontFamily: "'Cairo', system-ui, -apple-system, sans-serif"
+              }}
+              className="bg-white text-slate-950 p-3 font-sans text-xs leading-normal border border-slate-200 shadow-md box-border mx-auto"
             >
               <div className="text-center pb-2 border-b border-dashed border-slate-300">
-                <h2 className="font-extrabold text-base tracking-tight">{business.name}</h2>
+                <h2 className="font-extrabold text-base sm:text-lg leading-snug" dir="auto">{business.name}</h2>
                 <div className="text-[11px] text-slate-600">{lang === 'ar' ? 'وصل شراء وتوريد بضاعة' : 'Bon d\'achat et réception'}</div>
                 <div className="text-[11px] mt-0.5">{business.address} - {business.city}</div>
                 <div className="text-[11px] font-bold mt-0.5">{lang === 'ar' ? 'الهاتف:' : 'Tél:'} {business.phone}</div>
