@@ -8,6 +8,7 @@
  */
 
 import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 // Common Bluetooth Printer GATT Services & Characteristics
 const PRINTER_SERVICES = [
@@ -340,53 +341,148 @@ export class ThermalPrinterService {
   }
 
   /**
-   * Convert DOM Element to high resolution Canvas using html2canvas with oklch color function sanitization
+   * Helper to recursively copy computed styles onto cloned elements
+   * Resolves oklch and modern colors to rgb/hex so html2canvas never crashes
+   */
+  private copyComputedStyles(sourceEl: HTMLElement, targetEl: HTMLElement): void {
+    const computed = window.getComputedStyle(sourceEl);
+
+    // Box model & Layout
+    targetEl.style.display = computed.display;
+    targetEl.style.flexDirection = computed.flexDirection;
+    targetEl.style.flexWrap = computed.flexWrap;
+    targetEl.style.justifyContent = computed.justifyContent;
+    targetEl.style.alignItems = computed.alignItems;
+    targetEl.style.boxSizing = computed.boxSizing;
+    targetEl.style.width = computed.width;
+    targetEl.style.minWidth = computed.minWidth;
+    targetEl.style.maxWidth = computed.maxWidth;
+    targetEl.style.paddingTop = computed.paddingTop;
+    targetEl.style.paddingRight = computed.paddingRight;
+    targetEl.style.paddingBottom = computed.paddingBottom;
+    targetEl.style.paddingLeft = computed.paddingLeft;
+    targetEl.style.marginTop = computed.marginTop;
+    targetEl.style.marginRight = computed.marginRight;
+    targetEl.style.marginBottom = computed.marginBottom;
+    targetEl.style.marginLeft = computed.marginLeft;
+
+    // Typography
+    targetEl.style.fontFamily = computed.fontFamily;
+    targetEl.style.fontSize = computed.fontSize;
+    targetEl.style.fontWeight = computed.fontWeight;
+    targetEl.style.lineHeight = computed.lineHeight;
+    targetEl.style.textAlign = computed.textAlign;
+    targetEl.style.letterSpacing = computed.letterSpacing;
+    targetEl.style.whiteSpace = computed.whiteSpace;
+    targetEl.style.direction = computed.direction;
+
+    // Colors (Ensure rgb/hex, strictly avoid oklch)
+    const color = computed.color;
+    targetEl.style.color = (color && color.includes('oklch')) ? '#000000' : color;
+    
+    const bg = computed.backgroundColor;
+    targetEl.style.backgroundColor = (bg && bg.includes('oklch')) ? 'transparent' : bg;
+
+    // Borders
+    targetEl.style.borderTopWidth = computed.borderTopWidth;
+    targetEl.style.borderTopStyle = computed.borderTopStyle;
+    const btc = computed.borderTopColor;
+    targetEl.style.borderTopColor = (btc && btc.includes('oklch')) ? '#cbd5e1' : btc;
+
+    targetEl.style.borderBottomWidth = computed.borderBottomWidth;
+    targetEl.style.borderBottomStyle = computed.borderBottomStyle;
+    const bbc = computed.borderBottomColor;
+    targetEl.style.borderBottomColor = (bbc && bbc.includes('oklch')) ? '#cbd5e1' : bbc;
+
+    targetEl.style.borderLeftWidth = computed.borderLeftWidth;
+    targetEl.style.borderLeftStyle = computed.borderLeftStyle;
+    const blc = computed.borderLeftColor;
+    targetEl.style.borderLeftColor = (blc && blc.includes('oklch')) ? '#cbd5e1' : blc;
+
+    targetEl.style.borderRightWidth = computed.borderRightWidth;
+    targetEl.style.borderRightStyle = computed.borderRightStyle;
+    const brc = computed.borderRightColor;
+    targetEl.style.borderRightColor = (brc && brc.includes('oklch')) ? '#cbd5e1' : brc;
+
+    targetEl.style.borderRadius = computed.borderRadius;
+
+    // Tables
+    if (sourceEl.tagName === 'TABLE') {
+      targetEl.style.tableLayout = computed.tableLayout;
+      targetEl.style.borderCollapse = computed.borderCollapse;
+      targetEl.style.borderSpacing = computed.borderSpacing;
+      targetEl.style.width = '100%';
+    }
+
+    // Recurse for all children
+    const sourceChildren = Array.from(sourceEl.children) as HTMLElement[];
+    const targetChildren = Array.from(targetEl.children) as HTMLElement[];
+    for (let i = 0; i < sourceChildren.length && i < targetChildren.length; i++) {
+      this.copyComputedStyles(sourceChildren[i], targetChildren[i]);
+    }
+  }
+
+  /**
+   * Convert DOM Element to high resolution Canvas matching exact 80mm / 58mm dimensions
+   * Inlines computed styles to prevent any unstyled layout or oklch parser issues
    */
   public async renderElementToCanvas(
     element: HTMLElement, 
     paperWidth: '58mm' | '80mm' = '80mm'
   ): Promise<HTMLCanvasElement> {
+    // 58mm paper: 384 dots (48mm printable area at 203 DPI)
+    // 80mm paper: 576 dots (72mm printable area at 203 DPI)
     const targetWidth = paperWidth === '58mm' ? 384 : 576;
     
-    // Create offscreen container clone to avoid oklch stylesheet parsing errors in html2canvas
+    // Measure element's rendered on-screen dimensions
+    const rect = element.getBoundingClientRect();
+    const sourceWidth = rect.width || (paperWidth === '58mm' ? 220 : 302);
+    const sourceHeight = rect.height || element.scrollHeight;
+
+    // Off-screen host container matching source element's natural width
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = `${sourceWidth}px`;
+    container.style.backgroundColor = '#ffffff';
+    container.style.zIndex = '-9999';
+
     const clone = element.cloneNode(true) as HTMLElement;
-    clone.style.width = `${targetWidth}px`;
-    clone.style.maxWidth = `${targetWidth}px`;
-    clone.style.minWidth = `${targetWidth}px`;
-    clone.style.background = '#ffffff';
-    clone.style.color = '#000000';
-    clone.style.position = 'absolute';
-    clone.style.left = '-9999px';
-    clone.style.top = '0';
-    clone.style.zIndex = '99999';
-    clone.style.padding = '16px';
+    clone.style.margin = '0';
+    clone.style.boxShadow = 'none';
+    clone.style.width = '100%';
+    clone.style.maxWidth = '100%';
     clone.style.boxSizing = 'border-box';
-    document.body.appendChild(clone);
+    clone.style.backgroundColor = '#ffffff';
 
-    // Force all child elements to have legible black text
-    const allEls = clone.querySelectorAll('*');
-    allEls.forEach((el: any) => {
-      el.style.color = '#000000';
-    });
+    container.appendChild(clone);
+    document.body.appendChild(container);
 
-    await new Promise(r => setTimeout(r, 200));
+    // Recursively inline all computed styles onto the clone
+    this.copyComputedStyles(element, clone);
+
+    // Allow DOM to settle
+    await new Promise(r => setTimeout(r, 60));
+
+    const finalHeight = clone.offsetHeight || sourceHeight;
+    const targetScale = targetWidth / sourceWidth;
 
     try {
       const canvas = await html2canvas(clone, {
-        scale: 2,
+        scale: targetScale,
+        width: sourceWidth,
+        height: finalHeight,
+        windowWidth: sourceWidth,
+        windowHeight: finalHeight,
+        backgroundColor: '#ffffff',
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff',
-        width: targetWidth,
-        windowWidth: targetWidth,
         logging: false,
-        onclone: (doc) => {
-          const sheets = doc.querySelectorAll('style');
-          sheets.forEach(s => {
-            if (s.textContent && s.textContent.includes('oklch')) {
-              s.textContent = s.textContent.replace(/oklch\([^)]+\)/g, '#000000');
-            }
-          });
+        onclone: (clonedDoc) => {
+          // Remove external stylesheets to eliminate any oklch color parsing errors
+          const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+          styles.forEach(s => s.remove());
         }
       });
       return canvas;
@@ -394,10 +490,33 @@ export class ThermalPrinterService {
       console.error('html2canvas render error:', e);
       throw new Error('فشل توليد صورة الفاتورة: ' + (e?.message || 'خطأ غير معروف'));
     } finally {
-      if (clone.parentNode) {
-        document.body.removeChild(clone);
+      if (container.parentNode) {
+        document.body.removeChild(container);
       }
     }
+  }
+
+  /**
+   * Export canvas directly as an exact thermal roll PDF (80mm or 58mm)
+   */
+  public downloadReceiptPdf(
+    canvas: HTMLCanvasElement, 
+    filename: string = 'ticket', 
+    paperWidth: '58mm' | '80mm' = '80mm'
+  ): void {
+    const paperWidthMm = paperWidth === '58mm' ? 58 : 80;
+    const ratio = canvas.height / canvas.width;
+    const paperHeightMm = Math.max(30, Math.round(paperWidthMm * ratio));
+
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [paperWidthMm, paperHeightMm]
+    });
+
+    const imgData = canvas.toDataURL('image/png', 1.0);
+    pdf.addImage(imgData, 'PNG', 0, 0, paperWidthMm, paperHeightMm);
+    pdf.save(`${filename}.pdf`);
   }
 
   /**

@@ -41,6 +41,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
   const [isBtPrinting, setIsBtPrinting] = useState(false);
   const [btSuccess, setBtSuccess] = useState(false);
 
@@ -81,13 +82,13 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
   const handleShareImage = async () => {
     const printEl = document.getElementById('printable-purchase-receipt');
     if (!printEl || !purchase) return;
-    const invNum = purchase.invoice_number || purchase.id.slice(-6);
     try {
       const canvas = await thermalPrinterService.renderElementToCanvas(
         printEl,
         paperFormat === '58mm' ? '58mm' : '80mm'
       );
       const dataUrl = canvas.toDataURL('image/png');
+      setPreviewCanvas(canvas);
       setPreviewImageUrl(dataUrl);
     } catch (e: any) {
       alert(e?.message || (lang === 'ar' ? 'فشل توليد صورة الفاتورة' : 'Erreur'));
@@ -898,25 +899,17 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
             <button
               onClick={handleThermalPrint}
               disabled={isBtPrinting}
-              className={`flex-1 min-w-[120px] h-11 flex items-center justify-center gap-1.5 rounded-xl font-extrabold text-xs sm:text-sm shadow-xs active:scale-95 transition cursor-pointer disabled:opacity-50 ${
+              className={`flex-1 min-w-[110px] h-11 flex items-center justify-center gap-1.5 rounded-xl font-extrabold text-xs sm:text-sm shadow-xs active:scale-95 transition cursor-pointer disabled:opacity-50 ${
                 btSuccess 
                   ? 'bg-emerald-600 text-white' 
-                  : isStandalone && isAndroid
-                  ? 'bg-teal-600 hover:bg-teal-700 text-white'
                   : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}
-              title={
-                isStandalone
-                  ? (lang === 'ar' ? 'طباعة مباشرة لتطبيق الشاشة الرئيسية' : 'Impression directe PWA')
-                  : (lang === 'ar' ? 'طباعة مباشرة عبر البلوتوث للهاتف المحمول أو الكمبيوتر' : 'Impression Bluetooth Directe')
-              }
+              title={lang === 'ar' ? 'طباعة مباشرة عبر البلوتوث للهاتف المحمول أو الكمبيوتر' : 'Impression Bluetooth Directe'}
             >
               {isBtPrinting ? (
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
               ) : btSuccess ? (
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-              ) : isStandalone ? (
-                <Smartphone className="w-4 h-4 shrink-0" />
               ) : (
                 <Bluetooth className="w-4 h-4 shrink-0" />
               )}
@@ -925,22 +918,8 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                   ? (lang === 'ar' ? 'جاري الاتصال...' : 'Connexion...') 
                   : btSuccess 
                   ? (lang === 'ar' ? 'تمت الطباعة!' : 'Imprimé !')
-                  : isStandalone
-                  ? (lang === 'ar' ? 'طباعة عبر RawBT' : 'RawBT')
                   : (lang === 'ar' ? 'طباعة بلوتوث' : 'Bluetooth')}
               </span>
-            </button>
-          )}
-
-          {/* Quick Mobile Print Options (RawBT, System, Share, Chrome) */}
-          {paperFormat !== 'A4' && (isMobile || isStandalone) && (
-            <button
-              onClick={() => setIsMobileOptionsOpen(true)}
-              className="h-11 px-3 flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-xs shadow-xs active:scale-95 transition cursor-pointer shrink-0"
-              title={lang === 'ar' ? 'خيارات الطباعة في الهاتف وتطبيق الشاشة الرئيسية' : 'Options d\'impression mobile'}
-            >
-              <Smartphone className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span className="hidden sm:inline text-[11px]">{lang === 'ar' ? 'خيارات الهاتف' : 'Options'}</span>
             </button>
           )}
 
@@ -950,7 +929,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
             title={lang === 'ar' ? 'طباعة عادية عبر نافذة النظام' : 'Impression Standard'}
           >
             <Printer className="w-4 h-4 shrink-0" />
-            <span className="whitespace-nowrap">{paperFormat === 'A4' ? (lang === 'ar' ? 'طباعة الفاتورة' : 'Imprimer') : (lang === 'ar' ? 'طباعة عادية' : 'Système')}</span>
+            <span className="whitespace-nowrap">{lang === 'ar' ? 'طباعة / PDF' : 'PDF / Imprimer'}</span>
           </button>
         </div>
 
@@ -979,8 +958,13 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
       {/* Receipt Image Preview & Share Modal */}
       <ReceiptImageModal
         isOpen={!!previewImageUrl}
-        onClose={() => setPreviewImageUrl(null)}
+        onClose={() => {
+          setPreviewImageUrl(null);
+          setPreviewCanvas(null);
+        }}
         imageDataUrl={previewImageUrl || ''}
+        canvas={previewCanvas}
+        paperFormat={paperFormat === '58mm' ? '58mm' : '80mm'}
         title={lang === 'ar' ? `شراء-${purchase?.invoice_number || ''}` : `Achat-${purchase?.invoice_number || ''}`}
         lang={lang}
       />
