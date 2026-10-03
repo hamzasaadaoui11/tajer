@@ -93,6 +93,7 @@ interface AppContextType {
   addToCart: (product: { id: string; name: string; barcode: string; sale_price: number; purchase_price: number; current_stock: number; tax_rate?: number }) => void;
   removeFromCart: (productId: string) => void;
   updateCartQty: (productId: string, quantity: number) => void;
+  updateCartPrice: (productId: string, unitPrice: number) => void;
   updateCartDiscount: (productId: string, discount: number) => void;
   cartDiscount: number;
   setCartDiscount: (discount: number) => void;
@@ -1095,6 +1096,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const updateCartPrice = (productId: string, unitPrice: number) => {
+    setCart(prev =>
+      prev.map(item =>
+        item.product_id === productId
+          ? {
+              ...item,
+              unit_price: Math.max(0, unitPrice),
+              subtotal: item.quantity * Math.max(0, unitPrice),
+              total: Math.max(0, item.quantity * Math.max(0, unitPrice) - item.discount),
+            }
+          : item
+      )
+    );
+  };
+
   const updateCartDiscount = (productId: string, discount: number) => {
     setCart(prev =>
       prev.map(item =>
@@ -1175,6 +1191,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addToCart,
         removeFromCart,
         updateCartQty,
+        updateCartPrice,
         updateCartDiscount,
         cartDiscount,
         setCartDiscount,

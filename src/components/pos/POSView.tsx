@@ -27,7 +27,6 @@ import { PaymentMethod, Customer, Sale, Product } from '../../types';
 import { playBeep } from '../../services/barcode';
 import { formatMAD, formatUnit } from '../../i18n/locales';
 import { syncEngine } from '../../services/sync';
-import { ProductImageModal } from '../common/ProductImageModal';
 
 export const POSView: React.FC = () => {
   const {
@@ -38,6 +37,7 @@ export const POSView: React.FC = () => {
     addToCart,
     removeFromCart,
     updateCartQty,
+    updateCartPrice,
     clearCart,
     cartDiscount,
     setCartDiscount,
@@ -58,7 +58,6 @@ export const POSView: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
-  const [zoomedProduct, setZoomedProduct] = useState<Product | null>(null);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -344,9 +343,7 @@ export const POSView: React.FC = () => {
                       <img 
                         src={product.image_url} 
                         alt={product.name} 
-                        onClick={(e) => { e.stopPropagation(); setZoomedProduct(product); }}
-                        className="w-full h-24 rounded-xl object-cover border border-slate-100 dark:border-slate-800 cursor-pointer hover:opacity-95 hover:scale-[1.02] transition shadow-xs" 
-                        title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
+                        className="w-full h-24 rounded-xl object-cover border border-slate-100 dark:border-slate-800 transition shadow-xs" 
                       />
                     ) : (
                       <div className="w-full h-24 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-lg">
@@ -487,12 +484,22 @@ export const POSView: React.FC = () => {
                 key={item.product_id}
                 className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-xs flex items-center justify-between gap-2"
               >
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 space-y-1">
                   <div className="font-bold text-slate-900 dark:text-white truncate">
                     {item.product_name}
                   </div>
-                  <div className="text-[11px] text-teal-600 font-semibold mt-0.5">
-                    {formatCurrency(item.unit_price)} × {item.quantity} = {formatCurrency(item.total)}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={item.unit_price}
+                      onChange={e => updateCartPrice(item.product_id, parseFloat(e.target.value) || 0)}
+                      className="w-18 px-1.5 py-0.5 rounded-lg border border-teal-500 bg-white dark:bg-slate-900 text-xs font-extrabold text-teal-700 dark:text-teal-300 shadow-xs"
+                      title={lang === 'ar' ? 'تعديل سعر البيع لهذه الفاتورة فقط' : 'Modifier le prix de vente pour cette facture'}
+                    />
+                    <span className="text-[10px] text-slate-500">
+                      × {item.quantity} = <strong className="text-slate-900 dark:text-white">{formatCurrency(item.total)}</strong>
+                    </span>
                   </div>
                 </div>
 
@@ -865,15 +872,6 @@ export const POSView: React.FC = () => {
           </button>
         </div>
       )}
-
-      {/* Product Image Zoom Modal */}
-      <ProductImageModal
-        isOpen={Boolean(zoomedProduct)}
-        onClose={() => setZoomedProduct(null)}
-        product={zoomedProduct}
-        lang={lang}
-        formatCurrency={(val) => formatCurrency(val)}
-      />
 
     </div>
   );

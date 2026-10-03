@@ -84,7 +84,10 @@ export const ProductsView: React.FC = () => {
   // Product Image Zoom Modal State
   const [zoomedProduct, setZoomedProduct] = useState<Product | null>(null);
 
-  const products = useMemo(() => db.getProducts(business.id, branch.id), [business.id, branch.id, dataVersion]);
+  const products = useMemo(() => {
+    const list = db.getProducts(business.id, branch.id);
+    return [...list].sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
+  }, [business.id, branch.id, dataVersion]);
   const categories = useMemo(() => db.getCategories(business.id), [business.id, dataVersion]);
 
   // Immediate IndexedDB cache warming so all product photos display in 0ms without waiting for network
@@ -94,80 +97,7 @@ export const ProductsView: React.FC = () => {
     });
   }, [refreshData]);
 
-  // Ensure fresh products from the online database on view mount
-  useEffect(() => {
-    let active = true;
-    const fetchLiveDatabase = async () => {
-      const supabase = getSupabase();
-      if (!supabase || !business?.id || !navigator.onLine) return;
-      try {
-        const candidateBizIds = Array.from(new Set([
-          business.id,
-          db.getTenantId(),
-          business.id.startsWith('biz-') ? business.id.replace('biz-', '') : `biz-${business.id}`
-        ])).filter(Boolean);
 
-        const { data, error } = await supabase
-          .from('products')
-          .select('*')
-          .in('business_id', candidateBizIds);
-
-        if (!error && data && active) {
-          const pendingCreates = new Set(db.getPendingCreates('products'));
-          const currentProdsMap = new Map(db.getProducts(business.id, branch.id).map(p => [p.id, p]));
-
-          const freshList = (data as any[])
-            .filter(rp => rp.is_active !== false)
-            .map(rp => {
-              const localProd = currentProdsMap.get(rp.id);
-              const hasLocalPending = pendingCreates.has(rp.id);
-              const localIsNewer = localProd && new Date(localProd.updated_at || 0).getTime() > new Date(rp.updated_at || 0).getTime();
-              const keepLocal = localProd && (hasLocalPending || localIsNewer);
-
-              return {
-                id: rp.id,
-                business_id: rp.business_id || business.id,
-                branch_id: rp.branch_id || branch.id,
-                category_id: rp.category_id,
-                barcode: rp.barcode || '',
-                sku: rp.sku || '',
-                name: rp.name,
-                description: rp.description,
-                purchase_price: Number(rp.purchase_price || 0),
-                sale_price: Number(rp.sale_price || 0),
-                wholesale_price: rp.wholesale_price ? Number(rp.wholesale_price) : undefined,
-                current_stock: keepLocal ? localProd.current_stock : Number(rp.current_stock || 0),
-                min_stock: Number(rp.min_stock || 0),
-                unit: rp.unit || 'قطعة',
-                tax_rate: Number(rp.tax_rate ?? 20),
-                is_active: true,
-                image_url: rp.image_url || localProd?.image_url,
-                created_at: rp.created_at || new Date().toISOString(),
-                updated_at: keepLocal ? localProd.updated_at : (rp.updated_at || new Date().toISOString()),
-              };
-            });
-
-          // Live Supabase database is the absolute source of truth
-          freshList.forEach(p => db.removeFromTombstones('products', p.id));
-          const current = db.getProducts(business.id, branch.id);
-          const currentMap = new Map(current.map(p => [p.id, p.current_stock]));
-          const hasDiff = current.length !== freshList.length || freshList.some(fp => {
-            const curStock = currentMap.get(fp.id);
-            return curStock === undefined || curStock !== fp.current_stock;
-          });
-          if (hasDiff) {
-            db.set('products', freshList);
-            refreshData();
-          }
-        }
-      } catch (e) {
-        console.warn('Live products fetch notice:', e);
-      }
-    };
-
-    fetchLiveDatabase();
-    return () => { active = false; };
-  }, [business.id, branch.id]);
 
   // Filtered List
   const filteredProducts = useMemo(() => {
@@ -389,12 +319,13 @@ export const ProductsView: React.FC = () => {
     };
 
     setIsModalOpen(false);
-    const saveRes = await syncEngine.saveProductEverywhere(prodData, user.name);
-    if (!saveRes.success && saveRes.error) {
-      alert(lang === 'ar' ? `تنبيه: فشل الحفظ في قاعدة البيانات (${saveRes.error})` : `Attention: échec de l'enregistrement dans la base de données (${saveRes.error})`);
-    }
+    
+    // Save locally and refresh UI instantly (0ms delay)
+    db.saveProduct(prodData, user.name);
     refreshData();
-    syncEngine.syncAll().then(refreshData).catch(() => {});
+
+    // Sync to Supabase in the background
+    syncEngine.saveProductEverywhere(prodData, user.name).catch(() => {});
   };
 
   // Delete product

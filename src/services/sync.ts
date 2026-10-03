@@ -1260,6 +1260,33 @@ class SyncEngine {
     const supabase = getSupabase();
     if (supabase && isSupabaseConfigured() && navigator.onLine) {
       try {
+        // Ensure business exists in Supabase to satisfy foreign keys
+        try {
+          await supabase.from('businesses').upsert({
+            id: product.business_id,
+            name: 'المحل التجاري',
+            currency: 'MAD',
+            tax_enabled: true,
+            default_tax_rate: 20,
+            created_at: new Date().toISOString(),
+          }, { onConflict: 'id' });
+        } catch {}
+
+        // Ensure category exists in Supabase if category_id is present
+        if (product.category_id) {
+          try {
+            const cat = db.getCategories(product.business_id).find(c => c.id === product.category_id);
+            await supabase.from('categories').upsert({
+              id: product.category_id,
+              business_id: product.business_id,
+              name: cat ? cat.name : 'عام',
+              icon: cat?.icon || 'tag',
+              color: cat?.color || '#0284c7',
+              created_at: cat?.created_at || new Date().toISOString(),
+            }, { onConflict: 'id' });
+          } catch {}
+        }
+
         const payload = {
           id: product.id,
           business_id: product.business_id,
@@ -1283,7 +1310,7 @@ class SyncEngine {
           created_at: product.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
-        const { error } = await supabase.from('products').upsert(payload);
+        const { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' });
         if (!error) {
           db.addSyncedId('products', product.id);
           db.clearPendingCreates('products', [product.id]);

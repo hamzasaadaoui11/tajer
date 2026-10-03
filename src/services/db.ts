@@ -125,19 +125,7 @@ class LocalDatabase {
     try {
       localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch (e) {
-      // If mobile browser hits 5MB localStorage quota, strip heavy base64 images from localStorage copy
-      // so ALL products (all 71+ records, barcodes, prices, stock, etc.) are still 100% saved locally!
-      if (collection === 'products') {
-        try {
-          const lightweight = (data as any[]).map(item => {
-            if (item.image_url && item.image_url.length > 300) {
-              return { ...item, image_url: '' };
-            }
-            return item;
-          });
-          localStorage.setItem(cacheKey, JSON.stringify(lightweight));
-        } catch {}
-      }
+      // Ignore localStorage quota errors since IndexedDB is our primary persistent store
     }
   }
 
