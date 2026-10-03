@@ -1,6 +1,6 @@
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { db } from './db';
-import { Product, Customer, Supplier } from '../types';
+import { Product, Customer, Supplier, Sale } from '../types';
 
 export interface SyncResult {
   success: boolean;
@@ -735,11 +735,19 @@ class SyncEngine {
         if (!prodPullErr && remoteProducts) {
           const remoteIds = new Set<string>((remoteProducts as any[]).map((rp: any) => rp.id as string));
 
+          const pendingCreates = new Set(db.getPendingCreates('products'));
+          const localProductsMap = new Map(db.getProducts(bizId).map(p => [p.id, p]));
+
           // Direct mapping of all active products from Supabase - Single Source of Truth
           const activeRemoteProducts: Product[] = (remoteProducts as any[])
             .filter((rp: any) => rp.is_active !== false)
             .map((rp: any) => {
               db.removeFromTombstones('products', rp.id);
+              const localProd = localProductsMap.get(rp.id);
+              const hasLocalPending = pendingCreates.has(rp.id);
+              const localIsNewer = localProd && new Date(localProd.updated_at || 0).getTime() > new Date(rp.updated_at || 0).getTime();
+              const keepLocal = localProd && (hasLocalPending || localIsNewer);
+
               return {
                 id: rp.id,
                 business_id: rp.business_id || bizId,
@@ -752,20 +760,20 @@ class SyncEngine {
                 purchase_price: Number(rp.purchase_price || 0),
                 sale_price: Number(rp.sale_price || 0),
                 wholesale_price: rp.wholesale_price ? Number(rp.wholesale_price) : undefined,
-                current_stock: Number(rp.current_stock || 0),
+                current_stock: keepLocal ? localProd.current_stock : Number(rp.current_stock || 0),
                 min_stock: Number(rp.min_stock || 0),
                 unit: rp.unit || 'قطعة',
                 tax_rate: Number(rp.tax_rate ?? 20),
                 is_active: true,
-                image_url: rp.image_url,
+                image_url: rp.image_url || localProd?.image_url,
                 created_at: rp.created_at || new Date().toISOString(),
-                updated_at: rp.updated_at || new Date().toISOString(),
+                updated_at: keepLocal ? localProd.updated_at : (rp.updated_at || new Date().toISOString()),
               };
             });
 
           // Also preserve any genuinely new local products waiting to be synced
-          const pendingCreates = new Set(db.getPendingCreates('products'));
-          const localOnly = db.getProducts(bizId).filter(lp => pendingCreates.has(lp.id) && !remoteIds.has(lp.id));
+          const pendingProdCreates = new Set(db.getPendingCreates('products'));
+          const localOnly = db.getProducts(bizId).filter(lp => pendingProdCreates.has(lp.id) && !remoteIds.has(lp.id));
           const finalProducts = [...activeRemoteProducts, ...localOnly];
 
           // Save ONCE atomically with all products! NEVER save partial 92 items first!
@@ -1563,6 +1571,56 @@ class SyncEngine {
     } catch (e) {
       console.warn('pullSalesDirectly error:', e);
       return { success: false, count: 0 };
+    }
+  }
+
+  public async syncSaleAndStockEverywhere(sale: Sale): Promise<void> {
+    const supabase = getSupabase();
+    if (!supabase || !isSupabaseConfigured() || !navigator.onLine) {
+      return;
+    }
+    try {
+      const salePayload = {
+        id: sale.id,
+        business_id: sale.business_id,
+        branch_id: sale.branch_id,
+        invoice_number: sale.invoice_number,
+        customer_id: sale.customer_id || null,
+        customer_name: sale.customer_name || 'زبون عام',
+        items: sale.items || [],
+        subtotal: sale.subtotal || 0,
+        discount: sale.discount || 0,
+        tax_total: sale.tax_total || 0,
+        total: sale.total || 0,
+        amount_paid: sale.amount_paid || 0,
+        amount_due: sale.amount_due || 0,
+        payment_method: sale.payment_method || 'CASH',
+        status: sale.status || 'COMPLETED',
+        user_name: sale.user_name || 'كاشير',
+        notes: sale.notes || null,
+        created_at: sale.created_at || new Date().toISOString(),
+      };
+      await supabase.from('sales').upsert(salePayload);
+      db.addSyncedId('sales', sale.id);
+
+      const productUpdates = sale.items.map(async (item: any) => {
+        const prod = db.getProductById(item.product_id);
+        if (prod) {
+          const { error } = await supabase
+            .from('products')
+            .update({ 
+              current_stock: prod.current_stock, 
+              updated_at: prod.updated_at || new Date().toISOString() 
+            })
+            .eq('id', prod.id);
+          if (!error) {
+            db.clearPendingCreates('products', [prod.id]);
+          }
+        }
+      });
+      await Promise.allSettled(productUpdates);
+    } catch (e) {
+      console.warn('Sync sale and stock notice:', e);
     }
   }
 }

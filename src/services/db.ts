@@ -649,6 +649,7 @@ class LocalDatabase {
       }
       if (!isSync) {
         this.addAuditLog(product.business_id, userName, 'تعديل منتج', `تعديل بيانات المنتج: ${product.name}`);
+        this.addPendingCreate('products', product.id);
       }
       list[idx] = { ...product, updated_at: product.updated_at || new Date().toISOString() };
     }
@@ -985,6 +986,7 @@ class LocalDatabase {
       });
       prod.current_stock = adjustment.counted_qty;
       prod.updated_at = new Date().toISOString();
+      this.addPendingCreate('products', prod.id);
       this.set('products', products);
 
       const adjustments = this.get<StockAdjustment>('stock_adjustments');
@@ -1050,6 +1052,7 @@ class LocalDatabase {
         const newQty = oldQty - item.quantity;
         prod.current_stock = newQty;
         prod.updated_at = new Date().toISOString();
+        this.addPendingCreate('products', prod.id);
 
         // Record stock movement
         this.addStockMovement({
@@ -1209,6 +1212,7 @@ class LocalDatabase {
         const newQty = oldQty + item.quantity;
         prod.current_stock = newQty;
         prod.updated_at = new Date().toISOString();
+        this.addPendingCreate('products', prod.id);
         totalRestoredQty += item.quantity;
 
         // Record stock movement (adjustment indicating sale deletion and restock)
@@ -1318,6 +1322,7 @@ class LocalDatabase {
         const newQty = oldQty + item.quantity;
         prod.current_stock = newQty;
         prod.updated_at = new Date().toISOString();
+        this.addPendingCreate('products', prod.id);
 
         this.addStockMovement({
           id: 'mov-' + Math.random().toString(36).substring(2, 9),
@@ -1411,6 +1416,7 @@ class LocalDatabase {
         prod.current_stock = newQty;
         prod.purchase_price = item.unit_cost; // update latest cost
         prod.updated_at = new Date().toISOString();
+        this.addPendingCreate('products', prod.id);
 
         this.addStockMovement({
           id: 'mov-' + Math.random().toString(36).substring(2, 9),
@@ -1488,6 +1494,7 @@ class LocalDatabase {
         const newQty = Math.max(0, oldQty - item.quantity);
         prod.current_stock = newQty;
         prod.updated_at = new Date().toISOString();
+        this.addPendingCreate('products', prod.id);
 
         this.addStockMovement({
           id: 'mov-' + Math.random().toString(36).substring(2, 9),

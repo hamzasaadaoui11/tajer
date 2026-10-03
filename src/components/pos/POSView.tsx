@@ -184,15 +184,6 @@ export const POSView: React.FC = () => {
     // Save transaction in database
     db.createSale(newSale);
 
-    // Immediately push customer with updated debt to cloud
-    if (cartCustomer) {
-      const updatedCust = db.getCustomerById(cartCustomer.id);
-      if (updatedCust) {
-        syncEngine.saveCustomerEverywhere(updatedCust).catch(() => {});
-      }
-    }
-    syncEngine.syncAll().then(refreshData).catch(() => {});
-
     // Supermarket feedback
     playBeep();
 
@@ -205,6 +196,15 @@ export const POSView: React.FC = () => {
     // Trigger Print Receipt Modal automatically
     setActiveSaleReceipt(newSale);
     refreshData();
+
+    // Immediately push sale, updated customer, and decremented product stocks directly to cloud
+    if (cartCustomer) {
+      const updatedCust = db.getCustomerById(cartCustomer.id);
+      if (updatedCust) {
+        syncEngine.saveCustomerEverywhere(updatedCust).catch(() => {});
+      }
+    }
+    syncEngine.syncSaleAndStockEverywhere(newSale).catch(() => {});
   };
 
   return (
