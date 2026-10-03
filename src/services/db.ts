@@ -23,6 +23,7 @@ import {
   PaymentMethod
 } from '../types';
 import { generateSeedData } from './seed';
+import { get as idbGet, set as idbSet } from 'idb-keyval';
 
 const STORAGE_KEY_PREFIX = 'tajer_db_';
 
@@ -36,6 +37,7 @@ class LocalDatabase {
       window.addEventListener('storage', () => {
         this.clearCache();
       });
+      this.loadFromIndexedDB();
     }
   }
 
@@ -48,6 +50,35 @@ class LocalDatabase {
       this.tenantId = id || 'default';
       this.clearCache();
       localStorage.setItem('tajer_active_tenant', this.tenantId);
+      this.loadFromIndexedDB();
+    }
+  }
+
+  public async loadFromIndexedDB(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = `${this.getPrefix()}products`;
+      const idbProducts = await idbGet<Product[]>(key);
+      if (idbProducts && Array.isArray(idbProducts) && idbProducts.length > 0) {
+        const current = this.memoryCache.get(key) || [];
+        if (current.length === 0 || idbProducts.length >= current.length) {
+          this.memoryCache.set(key, idbProducts);
+        } else {
+          // Merge photos from IndexedDB into memory cache
+          const imgMap = new Map<string, string>();
+          idbProducts.forEach((p: Product) => {
+            if (p.image_url) imgMap.set(p.id, p.image_url);
+          });
+          current.forEach((p: any) => {
+            if (!p.image_url && imgMap.has(p.id)) {
+              p.image_url = imgMap.get(p.id);
+            }
+          });
+          this.memoryCache.set(key, current);
+        }
+      }
+    } catch (e) {
+      console.warn('IDB cache warming notice:', e);
     }
   }
 
@@ -80,10 +111,33 @@ class LocalDatabase {
   public set<T>(collection: string, data: T[]): void {
     const cacheKey = `${this.getPrefix()}${collection}`;
     this.memoryCache.set(cacheKey, data);
+
+    // 1. Asynchronously persist full data to IndexedDB (virtually unlimited quota on mobile, gigabytes!)
+    if (typeof window !== 'undefined') {
+      try {
+        idbSet(cacheKey, data).catch(err => {
+          console.warn(`IndexedDB save notice for ${collection}:`, err);
+        });
+      } catch {}
+    }
+
+    // 2. Persist synchronously to localStorage for immediate startup
     try {
       localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch (e) {
-      console.error(`Failed to save ${collection}`, e);
+      // If mobile browser hits 5MB localStorage quota, strip heavy base64 images from localStorage copy
+      // so ALL products (all 71+ records, barcodes, prices, stock, etc.) are still 100% saved locally!
+      if (collection === 'products') {
+        try {
+          const lightweight = (data as any[]).map(item => {
+            if (item.image_url && item.image_url.length > 300) {
+              return { ...item, image_url: '' };
+            }
+            return item;
+          });
+          localStorage.setItem(cacheKey, JSON.stringify(lightweight));
+        } catch {}
+      }
     }
   }
 
@@ -157,6 +211,13 @@ class LocalDatabase {
     } catch (e) {
       console.error(`Failed to remove from tombstones for ${collection}`, e);
     }
+  }
+
+  public clearAllTombstones(collection: string): void {
+    try {
+      const key = `${this.getPrefix()}tombstones_${collection}`;
+      localStorage.removeItem(key);
+    } catch {}
   }
 
   // --- Synced IDs for delta syncing ---

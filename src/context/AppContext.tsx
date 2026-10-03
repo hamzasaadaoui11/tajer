@@ -358,16 +358,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (isMounted) {
                 setIsOnboardingComplete(res.completed);
                 setIsAuthenticated(true);
-                setIsAuthChecking(false);
-                db.clearCache();
-                setDataVersion(v => v + 1);
-                // Immediately sync all remote data to local storage and update views
-                syncEngine.syncAll().then(syncRes => {
-                  if (syncRes.success || syncRes.processed > 0) {
-                    setDataVersion(v => v + 1);
-                  }
-                }).catch(() => {});
-                return;
+                // Wipe any old product tombstones created during previous outages
+                db.clearAllTombstones('products');
+
+                // Direct online database synchronization before unveiling the view
+                try {
+                  await Promise.race([
+                    syncEngine.syncAll(),
+                    new Promise(resolve => setTimeout(resolve, 6000))
+                  ]);
+                } catch (e) {
+                  console.warn('Initial online sync notice:', e);
+                }
+
+                if (isMounted) {
+                  await db.loadFromIndexedDB();
+                  setDataVersion(v => v + 1);
+                  setIsAuthChecking(false);
+                  return;
+                }
               }
             }
           }
@@ -408,13 +417,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           db.cleanupDemoContacts(res.restoredBusiness?.id || tenantInit.business.id);
           setIsOnboardingComplete(res.completed);
           setIsAuthenticated(true);
+          try {
+            await Promise.race([
+              syncEngine.syncAll(),
+              new Promise(resolve => setTimeout(resolve, 2000))
+            ]);
+          } catch {}
           db.clearCache();
           setDataVersion(v => v + 1);
-          syncEngine.syncAll().then(syncRes => {
-            if (syncRes.success || syncRes.processed > 0) {
-              setDataVersion(v => v + 1);
-            }
-          }).catch(() => {});
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
           setAuthEmail('');
@@ -672,6 +682,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 4. Realtime subscription: Direct local state updates without triggering re-upload cascades
     const supabase = getSupabase();
     let realtimeChannel: any = null;
+    let rtDebounceTimer: any = null;
+    const triggerDebouncedDataUpdate = () => {
+      if (rtDebounceTimer) clearTimeout(rtDebounceTimer);
+      rtDebounceTimer = setTimeout(() => {
+        setDataVersion(v => v + 1);
+      }, 150);
+    };
+
     if (supabase && isSupabaseConfigured()) {
       try {
         realtimeChannel = supabase
@@ -682,19 +700,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             (payload: any) => {
               if (payload.eventType === 'DELETE') {
                 const deletedId = payload.old?.id;
-                if (deletedId) {
+                if (deletedId && db.getProductById(deletedId)) {
                   db.removeProductLocally(deletedId);
-                  setDataVersion(v => v + 1);
+                  triggerDebouncedDataUpdate();
                 }
               } else if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
                 const p = payload.new;
-                if (p && p.business_id === business.id) {
+                const isOurBiz = p && (
+                  p.business_id === business.id || 
+                  p.business_id === db.getTenantId() ||
+                  (business.id.startsWith('biz-') && p.business_id === business.id.replace('biz-', ''))
+                );
+                if (isOurBiz) {
                   if (p.is_active === false) {
                     db.removeProductLocally(p.id);
                   } else {
                     db.saveProduct({
                       id: p.id,
-                      business_id: p.business_id,
+                      business_id: p.business_id || business.id,
                       branch_id: p.branch_id || branch.id,
                       category_id: p.category_id,
                       barcode: p.barcode || '',
@@ -714,7 +737,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                       updated_at: p.updated_at || new Date().toISOString(),
                     }, 'مزامنة السحابة', true);
                   }
-                  setDataVersion(v => v + 1);
+                  triggerDebouncedDataUpdate();
                 }
               }
             }
@@ -724,7 +747,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             { event: 'INSERT', schema: 'public', table: 'deleted_records' },
             (payload: any) => {
               if (payload.new) {
-                const { table_name, record_id } = payload.new;
+                const { table_name, record_id, business_id } = payload.new;
+                const isOurBiz = !business_id || business_id === business.id || business_id === db.getTenantId();
+                if (!isOurBiz) return;
+
                 if (table_name === 'products') {
                   db.removeProductLocally(record_id);
                 } else if (table_name === 'categories') {
@@ -734,7 +760,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 } else if (table_name === 'suppliers') {
                   db.removeSupplierLocally(record_id);
                 }
-                setDataVersion(v => v + 1);
+                triggerDebouncedDataUpdate();
               }
             }
           )
@@ -936,12 +962,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshData = useCallback(() => {
     setDataVersion(v => v + 1);
-    // Background auto-sync to cloud when online
-    if (navigator.onLine) {
-      setTimeout(() => {
-        syncEngine.syncAll().catch(() => {});
-      }, 600);
-    }
   }, []);
 
   // Update business

@@ -257,11 +257,17 @@ class SyncEngine {
         }
       }
 
-      // C4. Push Products
+      // C4. Push Products - ONLY push products that are pending creation/update!
+      const pendingCreateIds = new Set(db.getPendingCreates('products'));
       const localProducts = db.getProducts(bizId);
       const prodTombstones = new Set(db.getTombstones('products'));
       const prodPendingDeletes = new Set(db.getDeleteQueue('products'));
-      const validLocalProducts = localProducts.filter(p => !prodTombstones.has(p.id) && !prodPendingDeletes.has(p.id) && p.is_active !== false);
+      const validLocalProducts = localProducts.filter(p => 
+        pendingCreateIds.has(p.id) &&
+        !prodTombstones.has(p.id) && 
+        !prodPendingDeletes.has(p.id) && 
+        p.is_active !== false
+      );
 
       if (validLocalProducts.length > 0) {
         const prodPayload = validLocalProducts.map(p => ({
@@ -287,15 +293,22 @@ class SyncEngine {
           created_at: p.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }));
-        const { error: prodErr } = await supabase.from('products').upsert(prodPayload);
-        if (prodErr) {
-          errors.push(`السلع (Products): ${prodErr.message}`);
-        } else {
-          processed += validLocalProducts.length;
-          db.clearPendingCreates('products', validLocalProducts.map(p => p.id));
-          const currentSynced = db.getSyncedIds('products');
-          const newSynced = Array.from(new Set([...currentSynced, ...validLocalProducts.map(p => p.id)]));
-          db.setSyncedIds('products', newSynced);
+        // Push in batches of 5 to never exceed PostgREST HTTP body limits with images
+        const CHUNK_SIZE = 5;
+        for (let i = 0; i < prodPayload.length; i += CHUNK_SIZE) {
+          const chunk = prodPayload.slice(i, i + CHUNK_SIZE);
+          const { error: prodErr } = await supabase.from('products').upsert(chunk);
+          if (prodErr) {
+            console.warn(`Product upsert batch [${i}] error:`, prodErr.message);
+            errors.push(`السلع (Products): ${prodErr.message}`);
+          } else {
+            processed += chunk.length;
+            const chunkIds = chunk.map(c => c.id);
+            db.clearPendingCreates('products', chunkIds);
+            const currentSynced = db.getSyncedIds('products');
+            const newSynced = Array.from(new Set([...currentSynced, ...chunkIds]));
+            db.setSyncedIds('products', newSynced);
+          }
         }
       }
 
@@ -721,74 +734,47 @@ class SyncEngine {
 
         if (!prodPullErr && remoteProducts) {
           const remoteIds = new Set<string>((remoteProducts as any[]).map((rp: any) => rp.id as string));
-          const tombstones = new Set(db.getTombstones('products'));
-          const pendingDeletes = new Set(db.getDeleteQueue('products'));
 
-          // Keep all existing local products! Never delete products unless user explicitly deleted them locally
-          const localProds = db.getProducts(bizId);
-          const filteredLocal = localProds.filter(p => !pendingDeletes.has(p.id) && !tombstones.has(p.id) && p.is_active !== false);
+          // Direct mapping of all active products from Supabase - Single Source of Truth
+          const activeRemoteProducts: Product[] = (remoteProducts as any[])
+            .filter((rp: any) => rp.is_active !== false)
+            .map((rp: any) => {
+              db.removeFromTombstones('products', rp.id);
+              return {
+                id: rp.id,
+                business_id: rp.business_id || bizId,
+                branch_id: rp.branch_id || branchId,
+                category_id: rp.category_id,
+                barcode: rp.barcode || '',
+                sku: rp.sku || '',
+                name: rp.name,
+                description: rp.description,
+                purchase_price: Number(rp.purchase_price || 0),
+                sale_price: Number(rp.sale_price || 0),
+                wholesale_price: rp.wholesale_price ? Number(rp.wholesale_price) : undefined,
+                current_stock: Number(rp.current_stock || 0),
+                min_stock: Number(rp.min_stock || 0),
+                unit: rp.unit || 'قطعة',
+                tax_rate: Number(rp.tax_rate ?? 20),
+                is_active: true,
+                image_url: rp.image_url,
+                created_at: rp.created_at || new Date().toISOString(),
+                updated_at: rp.updated_at || new Date().toISOString(),
+              };
+            });
 
-          if (filteredLocal.length !== localProds.length) {
-            db.set('products', filteredLocal);
-            processed++;
-          }
+          // Also preserve any genuinely new local products waiting to be synced
+          const pendingCreates = new Set(db.getPendingCreates('products'));
+          const localOnly = db.getProducts(bizId).filter(lp => pendingCreates.has(lp.id) && !remoteIds.has(lp.id));
+          const finalProducts = [...activeRemoteProducts, ...localOnly];
 
-          // Save/update remote products locally
-          for (const rp of remoteProducts) {
-            if (pendingDeletes.has(rp.id) || tombstones.has(rp.id)) continue;
-            if (rp.is_active === false) {
-              // Product was deactivated/soft-deleted on remote! Prune locally
-              db.addToTombstones('products', rp.id);
-              continue;
-            }
-
-            const existing = filteredLocal.find(lp => lp.id === rp.id);
-            if (existing) {
-              const localTime = existing.updated_at ? new Date(existing.updated_at).getTime() : 0;
-              const remoteTime = rp.updated_at ? new Date(rp.updated_at).getTime() : 0;
-              if (localTime > remoteTime) {
-                continue;
-              }
-            }
-            if (!existing || 
-                existing.name !== rp.name || 
-                existing.current_stock !== Number(rp.current_stock) || 
-                existing.sale_price !== Number(rp.sale_price) || 
-                existing.purchase_price !== Number(rp.purchase_price) || 
-                existing.barcode !== rp.barcode ||
-                existing.sku !== rp.sku ||
-                existing.category_id !== rp.category_id ||
-                existing.is_active !== (rp.is_active !== false)
-            ) {
-              processed++;
-            }
-
-            db.saveProduct({
-              id: rp.id,
-              business_id: rp.business_id || bizId,
-              branch_id: rp.branch_id || branchId,
-              category_id: rp.category_id,
-              barcode: rp.barcode || '',
-              sku: rp.sku || '',
-              name: rp.name,
-              description: rp.description,
-              purchase_price: Number(rp.purchase_price || 0),
-              sale_price: Number(rp.sale_price || 0),
-              wholesale_price: rp.wholesale_price ? Number(rp.wholesale_price) : undefined,
-              current_stock: Number(rp.current_stock || 0),
-              min_stock: Number(rp.min_stock || 0),
-              unit: rp.unit || 'قطعة',
-              tax_rate: Number(rp.tax_rate ?? 20),
-              is_active: rp.is_active !== false,
-              image_url: rp.image_url,
-              created_at: rp.created_at || new Date().toISOString(),
-              updated_at: rp.updated_at || new Date().toISOString(),
-            }, 'مزامنة السحابة', true);
-          }
+          // Save ONCE atomically with all products! NEVER save partial 92 items first!
+          db.set('products', finalProducts);
+          processed += finalProducts.length;
 
           const currentSynced = db.getSyncedIds('products');
-          const allSynced = Array.from(new Set([...currentSynced, ...remoteIds]));
-          db.setSyncedIds('products', allSynced);
+          const newSynced = Array.from(new Set([...currentSynced, ...Array.from(remoteIds)]));
+          db.setSyncedIds('products', newSynced);
         }
       } catch (e) {
         console.warn('Pull products notice:', e);
@@ -1258,7 +1244,7 @@ class SyncEngine {
   }
 
   // Instant multi-device product save/update
-  public async saveProductEverywhere(product: Product, userName: string = 'النظام'): Promise<{ success: boolean }> {
+  public async saveProductEverywhere(product: Product, userName: string = 'النظام'): Promise<{ success: boolean; error?: string }> {
     // 1. Save locally
     db.saveProduct(product, userName);
 
@@ -1293,13 +1279,16 @@ class SyncEngine {
         if (!error) {
           db.addSyncedId('products', product.id);
           db.clearPendingCreates('products', [product.id]);
+          return { success: true };
         } else {
           console.warn('Direct save product error:', error.message);
           db.addPendingCreate('products', product.id);
+          return { success: false, error: error.message };
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Direct save product failed:', err);
         db.addPendingCreate('products', product.id);
+        return { success: false, error: err?.message || 'خطأ في الاتصال' };
       }
     } else {
       db.addPendingCreate('products', product.id);

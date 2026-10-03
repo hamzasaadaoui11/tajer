@@ -27,6 +27,7 @@ import { generateRandomBarcode } from '../../services/barcode';
 import { formatMAD, formatUnit } from '../../i18n/locales';
 import { generateSeedData } from '../../services/seed';
 import { syncEngine } from '../../services/sync';
+import { getSupabase } from '../../services/supabase';
 import { ProductImageModal } from '../common/ProductImageModal';
 
 const formatCategoryName = (catName: string, lang: string) => {
@@ -86,10 +87,73 @@ export const ProductsView: React.FC = () => {
   const products = useMemo(() => db.getProducts(business.id, branch.id), [business.id, branch.id, dataVersion]);
   const categories = useMemo(() => db.getCategories(business.id), [business.id, dataVersion]);
 
-  // Ensure fresh products on view mount
+  // Immediate IndexedDB cache warming so all product photos display in 0ms without waiting for network
   useEffect(() => {
-    refreshData();
+    db.loadFromIndexedDB().then(() => {
+      refreshData();
+    });
   }, [refreshData]);
+
+  // Ensure fresh products from the online database on view mount
+  useEffect(() => {
+    let active = true;
+    const fetchLiveDatabase = async () => {
+      const supabase = getSupabase();
+      if (!supabase || !business?.id || !navigator.onLine) return;
+      try {
+        const candidateBizIds = Array.from(new Set([
+          business.id,
+          db.getTenantId(),
+          business.id.startsWith('biz-') ? business.id.replace('biz-', '') : `biz-${business.id}`
+        ])).filter(Boolean);
+
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .in('business_id', candidateBizIds);
+
+        if (!error && data && active) {
+          const freshList = (data as any[])
+            .filter(rp => rp.is_active !== false)
+            .map(rp => ({
+              id: rp.id,
+              business_id: rp.business_id || business.id,
+              branch_id: rp.branch_id || branch.id,
+              category_id: rp.category_id,
+              barcode: rp.barcode || '',
+              sku: rp.sku || '',
+              name: rp.name,
+              description: rp.description,
+              purchase_price: Number(rp.purchase_price || 0),
+              sale_price: Number(rp.sale_price || 0),
+              wholesale_price: rp.wholesale_price ? Number(rp.wholesale_price) : undefined,
+              current_stock: Number(rp.current_stock || 0),
+              min_stock: Number(rp.min_stock || 0),
+              unit: rp.unit || 'قطعة',
+              tax_rate: Number(rp.tax_rate ?? 20),
+              is_active: true,
+              image_url: rp.image_url,
+              created_at: rp.created_at || new Date().toISOString(),
+              updated_at: rp.updated_at || new Date().toISOString(),
+            }));
+
+          // Live Supabase database is the absolute source of truth
+          freshList.forEach(p => db.removeFromTombstones('products', p.id));
+          const current = db.getProducts(business.id, branch.id);
+          const hasDiff = current.length !== freshList.length || freshList.some((fp, idx) => fp.id !== current[idx]?.id || fp.current_stock !== current[idx]?.current_stock);
+          if (hasDiff) {
+            db.set('products', freshList);
+            refreshData();
+          }
+        }
+      } catch (e) {
+        console.warn('Live products fetch notice:', e);
+      }
+    };
+
+    fetchLiveDatabase();
+    return () => { active = false; };
+  }, [business.id, branch.id]);
 
   // Filtered List
   const filteredProducts = useMemo(() => {
@@ -189,8 +253,8 @@ export const ProductsView: React.FC = () => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 360;
-          const MAX_HEIGHT = 360;
+          const MAX_WIDTH = 220;
+          const MAX_HEIGHT = 220;
           let width = img.width;
           let height = img.height;
 
@@ -210,7 +274,7 @@ export const ProductsView: React.FC = () => {
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.60);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.52);
             setImageUrl(dataUrl);
 
             // Compute compressed size
@@ -311,7 +375,10 @@ export const ProductsView: React.FC = () => {
     };
 
     setIsModalOpen(false);
-    await syncEngine.saveProductEverywhere(prodData, user.name);
+    const saveRes = await syncEngine.saveProductEverywhere(prodData, user.name);
+    if (!saveRes.success && saveRes.error) {
+      alert(lang === 'ar' ? `تنبيه: فشل الحفظ في قاعدة البيانات (${saveRes.error})` : `Attention: échec de l'enregistrement dans la base de données (${saveRes.error})`);
+    }
     refreshData();
     syncEngine.syncAll().then(refreshData).catch(() => {});
   };
