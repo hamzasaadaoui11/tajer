@@ -112,7 +112,7 @@ export const BottomNav: React.FC = () => {
               setShowMoreDrawer(false);
             }
           }}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-xs transition-opacity p-0 sm:p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-end justify-center tajer-modal-backdrop transition-opacity p-0 sm:p-4 animate-in fade-in duration-150"
         >
           <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
             {/* Drawer Header */}

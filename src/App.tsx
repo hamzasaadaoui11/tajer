@@ -18,6 +18,8 @@ import { ReceiptModal } from './components/common/ReceiptModal';
 import { PWAInstallPrompt } from './components/common/PWAInstallPrompt';
 import { BarcodeScannerModal } from './components/common/BarcodeScannerModal';
 import { LoginView } from './components/auth/LoginView';
+import { BlockedAccountView } from './components/auth/BlockedAccountView';
+import { isAccountBlocked } from './services/accessControl';
 
 const AppContent: React.FC = () => {
   const { 
@@ -26,6 +28,8 @@ const AppContent: React.FC = () => {
     isOnboardingComplete, 
     currentView, 
     activeSaleReceipt,
+    authEmail,
+    user,
     lang 
   } = useApp();
 
@@ -42,6 +46,12 @@ const AppContent: React.FC = () => {
 
   if (!isAuthenticated) {
     return <LoginView />;
+  }
+
+  // Check if account is blocked (e.g. zozo@gmail.com unpaid subscription)
+  const currentEmail = (authEmail || user?.email || '').trim().toLowerCase();
+  if (isAccountBlocked(currentEmail)) {
+    return <BlockedAccountView email={currentEmail} />;
   }
 
   if (!isOnboardingComplete) {

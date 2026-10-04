@@ -7,9 +7,11 @@ import {
   EyeOff, 
   ArrowRight, 
   AlertCircle, 
-  ShieldCheck 
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { isAccountBlocked, getBlockReason } from '../../services/accessControl';
 
 export const LoginView: React.FC = () => {
   const { loginWithSupabase, lang, setLang } = useApp();
@@ -20,6 +22,8 @@ export const LoginView: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const isInputBlocked = isAccountBlocked(email.trim());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +45,15 @@ export const LoginView: React.FC = () => {
     setLoading(false);
 
     if (!res.success) {
-      setErrorMessage(res.error || (lang === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Email ou mot de passe incorrect'));
+      if (isAccountBlocked(email.trim())) {
+        setErrorMessage(
+          lang === 'ar'
+            ? `تم توقيف هذا الحساب (${email.trim()}) لعدم سداد الاشتراك. يرجى تسوية المستحقات والتواصل مع الإدارة.`
+            : `Ce compte (${email.trim()}) est suspendu pour défaut de paiement. Veuillez contacter l'administration.`
+        );
+      } else {
+        setErrorMessage(res.error || (lang === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Email ou mot de passe incorrect'));
+      }
     }
   };
 
@@ -133,6 +145,16 @@ export const LoginView: React.FC = () => {
                 />
                 <Mail className="w-4 h-4 text-slate-400 absolute top-1/2 -translate-y-1/2 start-3.5 pointer-events-none" />
               </div>
+              {isInputBlocked && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold flex items-center gap-2 animate-in fade-in">
+                  <ShieldAlert className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>
+                    {lang === 'ar' 
+                      ? '⚠️ هذا الحساب معلق لعدم تسديد واجب الاشتراك' 
+                      : '⚠️ Ce compte est suspendu pour défaut de paiement'}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Password Field */}

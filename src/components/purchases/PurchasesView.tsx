@@ -285,7 +285,7 @@ export const PurchasesView: React.FC = () => {
               setIsModalOpen(false);
             }
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 overflow-y-auto animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center tajer-modal-backdrop p-3 overflow-y-auto animate-in fade-in duration-150"
         >
           <div className={`w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 my-auto max-h-[92vh] flex flex-col`}>
             

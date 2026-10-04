@@ -584,7 +584,7 @@ export const ReceiptModal: React.FC = () => {
           setActiveSaleReceipt(null);
         }
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center tajer-modal-backdrop p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
     >
       {/* Injected Print Stylesheet for Thermal and Standard A4 */}
       <style>{`

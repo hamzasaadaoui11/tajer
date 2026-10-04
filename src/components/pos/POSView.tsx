@@ -19,7 +19,8 @@ import {
   Tag,
   ChevronRight,
   ChevronLeft,
-  ChevronDown
+  ChevronDown,
+  Maximize2
 } from 'lucide-react';
 import { useApp, CartItem } from '../../context/AppContext';
 import { db } from '../../services/db';
@@ -27,6 +28,7 @@ import { PaymentMethod, Customer, Sale, Product } from '../../types';
 import { playBeep } from '../../services/barcode';
 import { formatMAD, formatUnit } from '../../i18n/locales';
 import { syncEngine } from '../../services/sync';
+import { ProductImageModal } from '../common/ProductImageModal';
 
 interface CartPriceInputProps {
   item: CartItem;
@@ -174,6 +176,7 @@ export const POSView: React.FC = () => {
   const [amountPaidInput, setAmountPaidInput] = useState<string>('');
   const [saleNotes, setSaleNotes] = useState<string>('');
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [selectedImageProduct, setSelectedImageProduct] = useState<Product | null>(null);
 
   // Products and Categories
   const products = useMemo(() => {
@@ -442,18 +445,32 @@ export const POSView: React.FC = () => {
                   }`}
                 >
                   <div className="space-y-2">
-                    {/* Image on Top */}
-                    {product.image_url ? (
-                      <img 
-                        src={product.image_url} 
-                        alt={product.name} 
-                        className="w-full h-24 rounded-xl object-cover border border-slate-100 dark:border-slate-800 transition shadow-xs" 
-                      />
-                    ) : (
-                      <div className="w-full h-24 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-lg">
-                        📦
-                      </div>
-                    )}
+                    {/* Image on Top - Click to Zoom */}
+                    <div
+                      className="relative rounded-xl overflow-hidden cursor-zoom-in group/img bg-slate-100 dark:bg-slate-800"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedImageProduct(product);
+                      }}
+                      title={lang === 'ar' ? 'تكبير صورة السلعة' : 'Agrandir l\'image'}
+                    >
+                      {product.image_url ? (
+                        <img 
+                          src={product.image_url} 
+                          alt={product.name} 
+                          className="w-full h-24 object-cover border border-slate-100 dark:border-slate-800 transition duration-200 group-hover/img:scale-105 shadow-xs" 
+                        />
+                      ) : (
+                        <div className="w-full h-24 text-slate-400 flex items-center justify-center font-bold text-lg">
+                          📦
+                        </div>
+                      )}
+                      {product.image_url && (
+                        <div className="absolute top-1.5 start-1.5 p-1 rounded-lg bg-black/50 text-white opacity-0 group-hover/img:opacity-100 transition shadow-xs">
+                          <Maximize2 className="w-3 h-3" />
+                        </div>
+                      )}
+                    </div>
 
                     {/* Product Name & Barcode */}
                     <div className="text-right">
@@ -466,20 +483,39 @@ export const POSView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Pricing and Stock info at the bottom */}
-                  <div className="mt-2.5 pt-2 border-t border-slate-100/60 dark:border-slate-800/60 flex items-end justify-between">
-                    <div>
-                      <span className="font-extrabold text-xs sm:text-sm text-teal-600 dark:text-teal-400">
+                  {/* Pricing and Stock info + Add to cart plus button */}
+                  <div className="mt-2.5 pt-2 border-t border-slate-100/60 dark:border-slate-800/60 flex items-center justify-between gap-1.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-extrabold text-xs sm:text-sm text-teal-600 dark:text-teal-400 truncate">
                         {formatCurrency(product.sale_price)}
+                      </div>
+                      <span className={`inline-block text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                        product.current_stock <= product.min_stock
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                          : 'text-slate-400'
+                      }`}>
+                        {product.current_stock} {formatUnit(product.unit, lang)}
                       </span>
                     </div>
-                    <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                      product.current_stock <= product.min_stock
-                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                        : 'text-slate-400'
-                    }`}>
-                      {product.current_stock} {formatUnit(product.unit, lang)}
-                    </span>
+
+                    {/* Dedicated Add to Cart Button (+) */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playBeep();
+                        addToCart(product);
+                      }}
+                      disabled={isOutOfStock}
+                      title={lang === 'ar' ? 'إضافة إلى السلة' : 'Ajouter au panier'}
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition shadow-xs active:scale-90 cursor-pointer shrink-0 ${
+                        isOutOfStock
+                          ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                          : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/30 hover:scale-105'
+                      }`}
+                    >
+                      <Plus className="w-4 h-4 stroke-[3]" />
+                    </button>
                   </div>
                 </div>
               );
@@ -700,7 +736,7 @@ export const POSView: React.FC = () => {
               setCustomerModalOpen(false);
             }
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center tajer-modal-backdrop p-4 animate-in fade-in duration-150"
         >
           <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 text-right animate-in zoom-in-95">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
@@ -762,7 +798,7 @@ export const POSView: React.FC = () => {
               setIsPaymentOpen(false);
             }
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center tajer-modal-backdrop p-3 animate-in fade-in duration-150"
         >
           <div className={`w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
             
@@ -993,6 +1029,19 @@ export const POSView: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Product Image Fullscreen Modal */}
+      <ProductImageModal
+        isOpen={!!selectedImageProduct}
+        onClose={() => setSelectedImageProduct(null)}
+        product={selectedImageProduct}
+        lang={lang}
+        formatCurrency={formatCurrency}
+        onAddToCart={(p) => {
+          playBeep();
+          addToCart(p);
+        }}
+      />
 
     </div>
   );

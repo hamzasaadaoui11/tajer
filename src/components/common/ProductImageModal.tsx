@@ -1,19 +1,23 @@
 import React from 'react';
-import { X, Tag, Barcode, Package } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Tag, Barcode, Package, Plus } from 'lucide-react';
 import { Language } from '../../i18n/locales';
 
 interface ProductImageModalProps {
   isOpen: boolean;
   onClose: () => void;
   product: {
+    id?: string;
     name: string;
     image_url?: string;
     sale_price: number;
     barcode?: string;
     current_stock?: number;
+    [key: string]: any;
   } | null;
   lang?: Language;
   formatCurrency: (amount: number) => string;
+  onAddToCart?: (product: any) => void;
 }
 
 export const ProductImageModal: React.FC<ProductImageModalProps> = ({
@@ -22,12 +26,13 @@ export const ProductImageModal: React.FC<ProductImageModalProps> = ({
   product,
   lang = 'ar',
   formatCurrency,
+  onAddToCart,
 }) => {
   if (!isOpen || !product) return null;
 
-  return (
+  const content = (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center tajer-modal-backdrop p-4 animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
@@ -74,7 +79,7 @@ export const ProductImageModal: React.FC<ProductImageModalProps> = ({
         </div>
 
         {/* Product Details Footer */}
-        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
           <div>
             <div className="text-[11px] text-slate-400 font-medium">
               {lang === 'ar' ? 'سعر البيع للزبون' : 'Prix de vente client'}
@@ -84,18 +89,36 @@ export const ProductImageModal: React.FC<ProductImageModalProps> = ({
             </div>
           </div>
 
-          {product.current_stock !== undefined && (
-            <div className="text-left">
-              <div className="text-[11px] text-slate-400 font-medium">
-                {lang === 'ar' ? 'المخزون المتوفر' : 'Stock disponible'}
+          <div className="flex items-center gap-3">
+            {product.current_stock !== undefined && (
+              <div className="text-center">
+                <div className="text-[11px] text-slate-400 font-medium">
+                  {lang === 'ar' ? 'المخزون' : 'Stock'}
+                </div>
+                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                  {product.current_stock}
+                </div>
               </div>
-              <div className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                {product.current_stock} {lang === 'ar' ? 'قطعة' : 'unités'}
-              </div>
-            </div>
-          )}
+            )}
+
+            {onAddToCart && (
+              <button
+                type="button"
+                onClick={() => {
+                  onAddToCart(product);
+                  onClose();
+                }}
+                className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 transition"
+              >
+                <Plus className="w-4 h-4 stroke-[3]" />
+                <span>{lang === 'ar' ? 'إضافة إلى السلة' : 'Ajouter au panier'}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 };

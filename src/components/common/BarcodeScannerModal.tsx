@@ -373,7 +373,7 @@ export const BarcodeScannerModal: React.FC = () => {
           handleClose();
         }
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center tajer-modal-backdrop p-3 sm:p-4 animate-in fade-in duration-150"
     >
       <div className={`w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 duration-150`}>
         

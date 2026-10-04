@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Printer, 
   Bluetooth, 
@@ -56,14 +57,16 @@ export const ThermalPrinterGuideModal: React.FC<Props> = ({ isOpen, onClose, lan
   const isAndroid = thermalPrinterService.isAndroid();
   const isWebBtSupported = thermalPrinterService.isWebBluetoothSupported();
 
-  return (
+  if (!isOpen) return null;
+
+  const content = (
     <div 
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className="fixed inset-0 z-[100] flex items-center justify-center tajer-modal-backdrop p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
     >
       <div 
         className={`w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 duration-150 my-auto`}
@@ -234,4 +237,6 @@ export const ThermalPrinterGuideModal: React.FC<Props> = ({ isOpen, onClose, lan
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Download, Share2, FileText, CheckCircle2 } from 'lucide-react';
 import { Language } from '../../i18n/locales';
 import { thermalPrinterService } from '../../services/thermalPrinter';
@@ -80,14 +81,16 @@ export const ReceiptImageModal: React.FC<Props> = ({
     }
   };
 
-  return (
+  if (!isOpen) return null;
+
+  const content = (
     <div 
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+      className="fixed inset-0 z-[100] flex items-center justify-center tajer-modal-backdrop p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
     >
       <div className={`w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 duration-150 my-auto`}>
         {/* Header */}
@@ -172,4 +175,6 @@ export const ReceiptImageModal: React.FC<Props> = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 };
