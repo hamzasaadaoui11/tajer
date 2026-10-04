@@ -94,7 +94,14 @@ export const PWAInstallPrompt: React.FC = () => {
       </div>
 
       {showIOSModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowIOSModal(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-xl ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
               {lang === 'ar' ? 'تثبيت تاجر على iPhone / iPad' : 'Installer Tajer sur iPhone / iPad'}
@@ -125,7 +132,14 @@ export const PWAInstallPrompt: React.FC = () => {
       )}
 
       {showAndroidModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAndroidModal(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-xl ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
             <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Smartphone className="w-5 h-5 text-teal-600" />

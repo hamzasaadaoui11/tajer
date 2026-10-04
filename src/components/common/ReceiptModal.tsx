@@ -408,11 +408,13 @@ export const ReceiptModal: React.FC = () => {
         print-color-adjust: exact !important;
         color-adjust: exact !important;
       }
+      html, body, #printable-receipt, #printable-receipt * {
+        font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
+      }
       html, body {
         margin: 0 !important;
         padding: 0 !important;
         background: #ffffff !important;
-        font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
       }
       @page {
         size: ${paperFormat === 'A4' ? 'A4 portrait' : paperFormat === '80mm' ? '80mm auto' : '58mm auto'};
@@ -422,7 +424,9 @@ export const ReceiptModal: React.FC = () => {
         .no-print {
           display: none !important;
         }
-        html, body {
+        html, body, #printable-receipt, #printable-receipt * {
+          font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
+        }
           margin: 0 !important;
           padding: 0 !important;
           background: #ffffff !important;
@@ -574,7 +578,14 @@ export const ReceiptModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-2 sm:p-4 overflow-y-auto">
+    <div 
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          setActiveSaleReceipt(null);
+        }
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+    >
       {/* Injected Print Stylesheet for Thermal and Standard A4 */}
       <style>{`
         @media print {
@@ -598,7 +609,7 @@ export const ReceiptModal: React.FC = () => {
             color: #000000 !important;
             box-shadow: none !important;
             border: none !important;
-            font-family: ${paperFormat === 'A4' ? 'sans-serif' : "'Courier New', Courier, monospace"} !important;
+            font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
           }
           @page {
             size: ${paperFormat === '58mm' ? '58mm 210mm' : paperFormat === '80mm' ? '80mm 297mm' : 'A4'};
@@ -674,7 +685,7 @@ export const ReceiptModal: React.FC = () => {
         {/* The Printable Invoice Container */}
         <div
           ref={previewContainerRef}
-          className="p-2 sm:p-4 overflow-x-hidden overflow-y-auto max-h-[72vh] bg-slate-200/70 dark:bg-slate-950 flex flex-col items-center"
+          className="p-2 sm:p-4 overflow-x-hidden overflow-y-auto max-h-[72vh] bg-slate-100 dark:bg-slate-900/50 flex flex-col items-center"
         >
           {paperFormat === 'A4' ? (
             /* Standard A4 Scaled Preview Container */

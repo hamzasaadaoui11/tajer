@@ -1037,7 +1037,7 @@ class LocalDatabase {
       if (pIdx !== -1) {
         const prod = products[pIdx];
         const oldQty = prod.current_stock;
-        const newQty = oldQty - item.quantity;
+        const newQty = Math.round((oldQty - item.quantity) * 1000) / 1000;
         prod.current_stock = newQty;
         prod.updated_at = new Date().toISOString();
         this.addPendingCreate('products', prod.id);
@@ -1307,7 +1307,7 @@ class LocalDatabase {
       if (pIdx !== -1) {
         const prod = products[pIdx];
         const oldQty = prod.current_stock;
-        const newQty = oldQty + item.quantity;
+        const newQty = Math.round((oldQty + item.quantity) * 1000) / 1000;
         prod.current_stock = newQty;
         prod.updated_at = new Date().toISOString();
         this.addPendingCreate('products', prod.id);

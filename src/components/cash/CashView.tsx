@@ -293,7 +293,14 @@ export const CashView: React.FC = () => {
 
       {/* Manual Cash In / Out Modal */}
       {isCashModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsCashModalOpen(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
             <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100 dark:border-slate-850">
               <h3 className="font-bold text-sm text-slate-900 dark:text-white">

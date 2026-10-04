@@ -81,7 +81,14 @@ export const ReceiptImageModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950 p-3 sm:p-4 overflow-y-auto">
+    <div 
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
+    >
       <div className={`w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 duration-150 my-auto`}>
         {/* Header */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-teal-50 to-blue-50 dark:from-teal-950/30 dark:to-blue-950/30">
@@ -105,8 +112,8 @@ export const ReceiptImageModal: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Receipt Preview Container (Clean, dark backdrop, exact ticket borders) */}
-        <div className="p-4 bg-slate-950 flex flex-col items-center justify-center max-h-[55vh] overflow-y-auto">
+        {/* Receipt Preview Container (Clean, soft backdrop, exact ticket borders) */}
+        <div className="p-4 bg-slate-100 dark:bg-slate-900/50 flex flex-col items-center justify-center max-h-[55vh] overflow-y-auto">
           <div className="shadow-2xl border border-slate-700 rounded-sm overflow-hidden bg-white max-w-full">
             <img 
               src={imageDataUrl} 

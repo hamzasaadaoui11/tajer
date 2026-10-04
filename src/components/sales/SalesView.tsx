@@ -491,7 +491,14 @@ export const SalesView: React.FC = () => {
 
       {/* Sale Return Modal */}
       {returnModalSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setReturnModalSale(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
               <div>
@@ -529,11 +536,13 @@ export const SalesView: React.FC = () => {
                       <span className="text-[11px] text-slate-400">{lang === 'ar' ? 'كمية الإرجاع:' : 'Qté retour:'}</span>
                       <input
                         type="number"
+                        step="any"
                         min="0"
                         max={item.quantity}
-                        value={returnQtys[item.product_id] || 0}
+                        value={returnQtys[item.product_id] !== undefined ? returnQtys[item.product_id] : 0}
                         onChange={e => {
-                          const val = Math.min(item.quantity, Math.max(0, parseInt(e.target.value) || 0));
+                          const parsed = parseFloat(e.target.value.replace(',', '.')) || 0;
+                          const val = Math.min(item.quantity, Math.max(0, Math.round(parsed * 1000) / 1000));
                           setReturnQtys(prev => ({ ...prev, [item.product_id]: val }));
                         }}
                         className="w-16 px-2 py-1 rounded-lg border border-teal-500 text-center font-bold text-xs bg-white dark:bg-slate-700"
@@ -577,7 +586,14 @@ export const SalesView: React.FC = () => {
 
       {/* Edit Payment / Convert to Credit Modal */}
       {editPaymentSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setEditPaymentSale(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
               <div>
@@ -703,7 +719,14 @@ export const SalesView: React.FC = () => {
 
       {/* Delete Sale Confirmation Modal */}
       {saleToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSaleToDelete(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-rose-200 dark:border-rose-900/60 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 space-y-4`}>
             {/* Modal Header */}
             <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">

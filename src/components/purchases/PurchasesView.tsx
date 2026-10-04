@@ -104,7 +104,8 @@ export const PurchasesView: React.FC = () => {
           copy[idx].unit_cost = prod.purchase_price;
         }
       } else if (field === 'quantity') {
-        copy[idx].quantity = Math.max(1, parseFloat(val as string) || 1);
+        const parsed = parseFloat(String(val).replace(',', '.'));
+        copy[idx].quantity = isNaN(parsed) ? 1 : Math.max(0.001, Math.round(parsed * 1000) / 1000);
       } else if (field === 'unit_cost') {
         copy[idx].unit_cost = Math.max(0, parseFloat(val as string) || 0);
       }
@@ -278,7 +279,14 @@ export const PurchasesView: React.FC = () => {
 
       {/* New Purchase Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 overflow-y-auto">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsModalOpen(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 overflow-y-auto animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 my-auto max-h-[92vh] flex flex-col`}>
             
             {/* Modal Header */}
@@ -372,7 +380,8 @@ export const PurchasesView: React.FC = () => {
                           </label>
                           <input
                             type="number"
-                            min="1"
+                            step="any"
+                            min="0.001"
                             value={item.quantity}
                             onChange={e => handleUpdateItemRow(idx, 'quantity', e.target.value)}
                             className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-center font-bold text-xs outline-hidden focus:ring-2 focus:ring-teal-500"

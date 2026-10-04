@@ -818,7 +818,14 @@ export const ProductsView: React.FC = () => {
 
       {/* Product Create / Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 overflow-y-auto">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsModalOpen(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 overflow-y-auto animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 my-auto`}>
             
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
@@ -1118,7 +1125,14 @@ export const ProductsView: React.FC = () => {
 
       {/* Physical Count Adjustment Modal */}
       {adjustModalProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setAdjustModalProduct(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
             <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-1">
               {lang === 'ar' ? 'تسوية جرد فعلي (Inventaire)' : 'Inventaire physique'}
@@ -1183,7 +1197,14 @@ export const ProductsView: React.FC = () => {
 
       {/* Product Delete Confirmation Dialog Modal */}
       {deleteConfirmProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setDeleteConfirmProduct(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-100 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 duration-200`}>
             <div className="flex flex-col items-center text-center space-y-3">
               <div className="w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center text-rose-600 dark:text-rose-400">

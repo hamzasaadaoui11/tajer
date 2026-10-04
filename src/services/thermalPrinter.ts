@@ -431,7 +431,7 @@ export class ThermalPrinterService {
   public async renderElementToCanvas(
     element: HTMLElement, 
     paperWidth: '58mm' | '80mm' = '80mm',
-    scaleMultiplier: number = 3
+    scaleMultiplier: number = 4
   ): Promise<HTMLCanvasElement> {
     // 58mm paper: 384 dots (48mm printable area at 203 DPI)
     // 80mm paper: 576 dots (72mm printable area at 203 DPI)
@@ -484,7 +484,7 @@ export class ThermalPrinterService {
         allowTaint: true,
         logging: false,
         onclone: (clonedDoc) => {
-          // Keep font links (Google Fonts / Cairo), remove only app stylesheets with oklch
+          // Keep font links (Google Fonts / Cairo)
           const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]');
           links.forEach(l => {
             const href = l.getAttribute('href') || '';
@@ -492,8 +492,25 @@ export class ThermalPrinterService {
               l.remove();
             }
           });
+
+          // Remove style tags that contain oklch/color-mix to prevent html2canvas parsing crash
           const styles = clonedDoc.querySelectorAll('style');
-          styles.forEach(s => s.remove());
+          styles.forEach(s => {
+            const content = s.textContent || '';
+            if (content.includes('oklch') || content.includes('color-mix') || content.includes('@theme')) {
+              s.remove();
+            }
+          });
+
+          // Inject Cairo & Plus Jakarta Sans typography rule so font never falls back
+          const fontStyle = clonedDoc.createElement('style');
+          fontStyle.textContent = `
+            * {
+              font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
+              letter-spacing: normal !important;
+            }
+          `;
+          clonedDoc.head.appendChild(fontStyle);
         }
       });
       return canvas;

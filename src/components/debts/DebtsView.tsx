@@ -430,7 +430,14 @@ export const DebtsView: React.FC = () => {
 
       {/* Payment Settlement Modal */}
       {payingEntity && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setPayingEntity(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
               <div>
@@ -519,7 +526,14 @@ export const DebtsView: React.FC = () => {
 
       {/* Manual Add Debt Modal */}
       {isAddDebtOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsAddDebtOpen(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
               <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
@@ -643,7 +657,14 @@ export const DebtsView: React.FC = () => {
 
       {/* Customer Statement & Invoices Drawer/Modal */}
       {statementCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setStatementCustomer(null);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} max-h-[85vh] flex flex-col animate-in zoom-in-95`}>
             
             {/* Header */}

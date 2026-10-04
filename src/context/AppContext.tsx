@@ -1082,14 +1082,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       removeFromCart(productId);
       return;
     }
+    const cleanQty = Math.round(quantity * 1000) / 1000;
     setCart(prev =>
       prev.map(item =>
         item.product_id === productId
           ? {
               ...item,
-              quantity,
-              subtotal: quantity * item.unit_price,
-              total: Math.max(0, quantity * item.unit_price - item.discount),
+              quantity: cleanQty,
+              subtotal: Math.round(cleanQty * item.unit_price * 100) / 100,
+              total: Math.max(0, Math.round((cleanQty * item.unit_price - item.discount) * 100) / 100),
             }
           : item
       )
@@ -1097,14 +1098,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCartPrice = (productId: string, unitPrice: number) => {
+    const cleanPrice = Math.max(0, Math.round(unitPrice * 100) / 100);
     setCart(prev =>
       prev.map(item =>
         item.product_id === productId
           ? {
               ...item,
-              unit_price: Math.max(0, unitPrice),
-              subtotal: item.quantity * Math.max(0, unitPrice),
-              total: Math.max(0, item.quantity * Math.max(0, unitPrice) - item.discount),
+              unit_price: cleanPrice,
+              subtotal: Math.round(item.quantity * cleanPrice * 100) / 100,
+              total: Math.max(0, Math.round((item.quantity * cleanPrice - item.discount) * 100) / 100),
             }
           : item
       )
@@ -1140,10 +1142,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const taxTotal = business.taxEnabled ? (finalTotal * rate) / (100 + rate) : 0; // tax included calculation
 
     return {
-      subtotal: rawSubtotal,
-      discount: totalDiscount,
-      taxTotal,
-      total: finalTotal,
+      subtotal: Math.round(rawSubtotal * 100) / 100,
+      discount: Math.round(totalDiscount * 100) / 100,
+      taxTotal: Math.round(taxTotal * 100) / 100,
+      total: Math.round(finalTotal * 100) / 100,
     };
   }, [cart, cartDiscount, business.taxEnabled, business.defaultTaxRate]);
 

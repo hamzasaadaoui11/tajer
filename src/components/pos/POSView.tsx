@@ -67,6 +67,68 @@ const CartPriceInput: React.FC<CartPriceInputProps> = ({ item, updateCartPrice }
   );
 };
 
+interface CartQtyInputProps {
+  item: CartItem;
+  updateCartQty: (productId: string, quantity: number) => void;
+  removeFromCart: (productId: string) => void;
+}
+
+const CartQtyInput: React.FC<CartQtyInputProps> = ({ item, updateCartQty, removeFromCart }) => {
+  const [textVal, setTextVal] = useState(item.quantity.toString());
+
+  useEffect(() => {
+    const currentNum = parseFloat(textVal.replace(',', '.'));
+    if (isNaN(currentNum) || currentNum !== item.quantity) {
+      setTextVal(item.quantity.toString());
+    }
+  }, [item.quantity]);
+
+  const commitValue = (val: string) => {
+    const cleaned = val.trim().replace(',', '.');
+    const parsed = parseFloat(cleaned);
+    if (!isNaN(parsed) && parsed > 0) {
+      const rounded = Math.round(parsed * 1000) / 1000;
+      setTextVal(rounded.toString());
+      updateCartQty(item.product_id, rounded);
+    } else if (parsed === 0) {
+      removeFromCart(item.product_id);
+    } else {
+      setTextVal(item.quantity.toString());
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={textVal}
+      onChange={e => {
+        const raw = e.target.value;
+        // Allow typing numbers, and a single decimal point or comma (e.g. 1.5 or 1,5 or 0.25)
+        if (/^[0-9]*[.,]?[0-9]*$/.test(raw)) {
+          setTextVal(raw);
+          const parsed = parseFloat(raw.replace(',', '.'));
+          if (!isNaN(parsed) && parsed > 0) {
+            updateCartQty(item.product_id, parsed);
+          }
+        }
+      }}
+      onBlur={() => {
+        commitValue(textVal);
+      }}
+      onKeyDown={e => {
+        if (e.key === 'Enter') {
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      onFocus={e => e.target.select()}
+      className="w-12 sm:w-14 px-1 py-0.5 text-center font-bold text-xs rounded-lg border border-teal-500/40 focus:border-teal-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-teal-500 shadow-xs"
+      placeholder="1"
+      title="كتابة الكمية (تدعم الفاصلة مثل 1.5 أو 0.25)"
+    />
+  );
+};
+
 export const POSView: React.FC = () => {
   const {
     business,
@@ -538,18 +600,28 @@ export const POSView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Qty increment / decrement */}
-                <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5">
+                {/* Qty increment / decrement with editable decimal input */}
+                <div className="flex items-center gap-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-xs">
                   <button
-                    onClick={() => updateCartQty(item.product_id, item.quantity - 1)}
-                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-600"
+                    type="button"
+                    onClick={() => updateCartQty(item.product_id, Math.max(0, Math.round((item.quantity - 1) * 1000) / 1000))}
+                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                    title={lang === 'ar' ? 'إنقاص الكمية' : 'Diminuer la quantité'}
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
-                  <span className="w-6 text-center font-bold text-xs">{item.quantity}</span>
+
+                  <CartQtyInput
+                    item={item}
+                    updateCartQty={updateCartQty}
+                    removeFromCart={removeFromCart}
+                  />
+
                   <button
-                    onClick={() => updateCartQty(item.product_id, item.quantity + 1)}
-                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-600"
+                    type="button"
+                    onClick={() => updateCartQty(item.product_id, Math.round((item.quantity + 1) * 1000) / 1000)}
+                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                    title={lang === 'ar' ? 'زيادة الكمية' : 'Augmenter la quantité'}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -622,7 +694,14 @@ export const POSView: React.FC = () => {
 
       {/* Customer Selection Modal */}
       {customerModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setCustomerModalOpen(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
           <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 text-right animate-in zoom-in-95">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
               <h3 className="font-bold text-sm text-slate-900 dark:text-white">
@@ -677,7 +756,14 @@ export const POSView: React.FC = () => {
 
       {/* Payment Drawer Modal */}
       {isPaymentOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsPaymentOpen(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 animate-in fade-in duration-150"
+        >
           <div className={`w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95`}>
             
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
