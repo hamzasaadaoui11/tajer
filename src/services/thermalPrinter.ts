@@ -430,11 +430,13 @@ export class ThermalPrinterService {
    */
   public async renderElementToCanvas(
     element: HTMLElement, 
-    paperWidth: '58mm' | '80mm' = '80mm'
+    paperWidth: '58mm' | '80mm' = '80mm',
+    scaleMultiplier: number = 3
   ): Promise<HTMLCanvasElement> {
     // 58mm paper: 384 dots (48mm printable area at 203 DPI)
     // 80mm paper: 576 dots (72mm printable area at 203 DPI)
-    const targetWidth = paperWidth === '58mm' ? 384 : 576;
+    const baseWidth = paperWidth === '58mm' ? 384 : 576;
+    const targetWidth = baseWidth * scaleMultiplier;
     
     // Measure element's rendered on-screen dimensions
     const rect = element.getBoundingClientRect();
@@ -542,7 +544,7 @@ export class ThermalPrinterService {
     }
 
     try {
-      const canvas = await this.renderElementToCanvas(element, paperWidth);
+      const canvas = await this.renderElementToCanvas(element, paperWidth, 1.5);
       const escposData = this.canvasToEscPosRaster(canvas);
       await this.sendChunks(escposData);
       return { success: true };
