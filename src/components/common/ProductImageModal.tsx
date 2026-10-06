@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Tag, Barcode, Package, Plus } from 'lucide-react';
 import { Language } from '../../i18n/locales';
+import { imageService } from '../../services/imageService';
 
 interface ProductImageModalProps {
   isOpen: boolean;
@@ -28,6 +29,23 @@ export const ProductImageModal: React.FC<ProductImageModalProps> = ({
   formatCurrency,
   onAddToCart,
 }) => {
+  const [modalImg, setModalImg] = useState<string>(() => {
+    return imageService.getImage(product?.id, product?.image_url);
+  });
+
+  useEffect(() => {
+    if (!product) return;
+    const current = imageService.getImage(product.id, product.image_url);
+    setModalImg(current);
+    if (!current && product.id) {
+      imageService.loadImagesForProducts([{ id: product.id, image_url: product.image_url }]);
+    }
+    const unsub = imageService.subscribe(() => {
+      setModalImg(imageService.getImage(product.id, product.image_url));
+    });
+    return unsub;
+  }, [product?.id, product?.image_url]);
+
   if (!isOpen || !product) return null;
 
   const content = (
@@ -65,9 +83,9 @@ export const ProductImageModal: React.FC<ProductImageModalProps> = ({
 
         {/* Large Product Image Container */}
         <div className="p-4 bg-slate-950 flex items-center justify-center relative min-h-[300px] max-h-[50vh] overflow-hidden">
-          {product.image_url ? (
+          {modalImg ? (
             <img 
-              src={product.image_url} 
+              src={modalImg} 
               alt={product.name} 
               className="max-h-[45vh] w-auto max-w-full object-contain rounded-xl shadow-lg border border-slate-800"
             />

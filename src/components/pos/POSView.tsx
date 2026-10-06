@@ -29,6 +29,8 @@ import { playBeep } from '../../services/barcode';
 import { formatMAD, formatUnit } from '../../i18n/locales';
 import { syncEngine } from '../../services/sync';
 import { ProductImageModal } from '../common/ProductImageModal';
+import { ProductImage } from '../common/ProductImage';
+import { imageService } from '../../services/imageService';
 
 interface CartPriceInputProps {
   item: CartItem;
@@ -211,6 +213,10 @@ export const POSView: React.FC = () => {
   const paginatedProducts = useMemo(() => {
     return filteredProducts.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredProducts, startIndex]);
+
+  useEffect(() => {
+    imageService.loadImagesForProducts(paginatedProducts);
+  }, [paginatedProducts]);
 
   // Handle direct barcode scanner enter
   const handleBarcodeSubmit = (e: React.FormEvent) => {
@@ -454,24 +460,15 @@ export const POSView: React.FC = () => {
                       }}
                       title={lang === 'ar' ? 'تكبير صورة السلعة' : 'Agrandir l\'image'}
                     >
-                      {product.image_url ? (
-                        <img 
-                          src={product.image_url} 
-                          alt={product.name} 
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-24 object-cover border border-slate-100 dark:border-slate-800 transition duration-200 group-hover/img:scale-105 shadow-xs" 
-                        />
-                      ) : (
-                        <div className="w-full h-24 text-slate-400 flex items-center justify-center font-bold text-lg">
-                          📦
-                        </div>
-                      )}
-                      {product.image_url && (
-                        <div className="absolute top-1.5 start-1.5 p-1 rounded-lg bg-black/50 text-white opacity-0 group-hover/img:opacity-100 transition shadow-xs">
-                          <Maximize2 className="w-3 h-3" />
-                        </div>
-                      )}
+                      <ProductImage
+                        productId={product.id}
+                        productName={product.name}
+                        initialImageUrl={product.image_url}
+                        className="w-full h-24 object-cover border border-slate-100 dark:border-slate-800 transition duration-200 group-hover/img:scale-105 shadow-xs"
+                      />
+                      <div className="absolute top-1.5 start-1.5 p-1 rounded-lg bg-black/50 text-white opacity-0 group-hover/img:opacity-100 transition shadow-xs">
+                        <Maximize2 className="w-3 h-3" />
+                      </div>
                     </div>
 
                     {/* Product Name & Barcode */}

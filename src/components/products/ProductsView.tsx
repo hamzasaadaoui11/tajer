@@ -29,6 +29,8 @@ import { generateSeedData } from '../../services/seed';
 import { syncEngine } from '../../services/sync';
 import { getSupabase } from '../../services/supabase';
 import { ProductImageModal } from '../common/ProductImageModal';
+import { ProductImage } from '../common/ProductImage';
+import { imageService } from '../../services/imageService';
 
 const formatCategoryName = (catName: string, lang: string) => {
   if (lang === 'ar' || !catName) return catName;
@@ -128,6 +130,10 @@ export const ProductsView: React.FC = () => {
     return filteredProducts.slice(start, start + itemsPerPage);
   }, [filteredProducts, currentPage, itemsPerPage]);
 
+  useEffect(() => {
+    imageService.loadImagesForProducts(paginatedProducts);
+  }, [paginatedProducts]);
+
   // Open modal for new product
   const handleOpenNew = () => {
     setEditingProduct(null);
@@ -157,12 +163,13 @@ export const ProductsView: React.FC = () => {
     setSalePrice(p.sale_price.toString());
     setCurrentStock(p.current_stock.toString());
     setMinStock(p.min_stock.toString());
-    setImageUrl(p.image_url || '');
+    const currentImg = imageService.getImage(p.id, p.image_url);
+    setImageUrl(currentImg);
     setTaxRate((p.tax_rate ?? business.defaultTaxRate ?? 20).toString());
     
-    if (p.image_url && p.image_url.startsWith('data:image')) {
+    if (currentImg && currentImg.startsWith('data:image')) {
       try {
-        const parts = p.image_url.split(',');
+        const parts = currentImg.split(',');
         if (parts[1]) {
           const base64Length = parts[1].length;
           const compSizeKB = ((base64Length * 3) / 4 / 1024).toFixed(0);
@@ -323,6 +330,9 @@ export const ProductsView: React.FC = () => {
     setIsModalOpen(false);
     
     // Save locally and refresh UI instantly (0ms delay)
+    if (imageUrl) {
+      imageService.setImage(prodData.id, imageUrl);
+    }
     db.saveProduct(prodData, user.name);
     refreshData();
 
@@ -533,21 +543,14 @@ export const ProductsView: React.FC = () => {
                   {/* Top row: Image, Title, Barcode and Stock Badge */}
                   <div className="flex items-start gap-3 justify-between">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                      {p.image_url ? (
-                        <img 
-                          src={p.image_url} 
-                          alt={p.name} 
-                          loading="lazy"
-                          decoding="async"
-                          onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
-                          className="w-14 h-14 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800 cursor-pointer hover:opacity-95 hover:scale-105 transition shadow-2xs" 
-                          title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center shrink-0 font-bold text-xs">
-                          📦
-                        </div>
-                      )}
+                      <ProductImage
+                        productId={p.id}
+                        productName={p.name}
+                        initialImageUrl={p.image_url}
+                        onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
+                        className="w-14 h-14 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800 cursor-pointer hover:opacity-95 hover:scale-105 transition shadow-2xs"
+                        title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="font-bold text-sm text-slate-900 dark:text-white leading-snug break-words">
                           {p.name}
@@ -660,21 +663,14 @@ export const ProductsView: React.FC = () => {
                       <tr key={p.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
                         <td className="p-3.5">
                           <div className="flex items-center gap-2.5">
-                            {p.image_url ? (
-                              <img 
-                                src={p.image_url} 
-                                alt={p.name} 
-                                loading="lazy"
-                                decoding="async"
-                                onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
-                                className="w-12 h-12 rounded-xl object-cover border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-105 transition shadow-xs" 
-                                title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-xs">
-                                📦
-                              </div>
-                            )}
+                            <ProductImage
+                              productId={p.id}
+                              productName={p.name}
+                              initialImageUrl={p.image_url}
+                              onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
+                              className="w-12 h-12 rounded-xl object-cover border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-105 transition shadow-xs"
+                              title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
+                            />
                             <div>
                               <div className="font-bold text-slate-900 dark:text-white">{p.name}</div>
                               <div className="text-[10px] text-slate-400 font-mono mt-0.5">{p.barcode}</div>
