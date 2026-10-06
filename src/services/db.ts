@@ -56,7 +56,7 @@ class LocalDatabase {
   }
 
   /**
-   * One-time purge of legacy heavy base64 strings in localStorage to permanently free quota
+   * Instant purge of legacy heavy base64 strings in localStorage to permanently free quota and avoid iOS watchdog crash
    */
   public cleanupOversizedLocalStorage(): void {
     if (typeof window === 'undefined' || !window.localStorage) return;
@@ -70,22 +70,9 @@ class LocalDatabase {
       }
       for (const k of keysToClean) {
         const val = localStorage.getItem(k);
-        if (val && (val.includes('data:image') || val.length > 300000)) {
-          try {
-            const parsed = JSON.parse(val);
-            if (Array.isArray(parsed)) {
-              const stripped = parsed.map((item: any) => {
-                if (item && item.image_url && item.image_url.startsWith('data:')) {
-                  return { ...item, image_url: '' };
-                }
-                return item;
-              });
-              localStorage.removeItem(k);
-              localStorage.setItem(k, JSON.stringify(stripped));
-            }
-          } catch {
-            localStorage.removeItem(k);
-          }
+        if (val && (val.length > 250000 || val.includes('data:image/'))) {
+          // Instantly delete oversized/bloated string without parsing to prevent iOS WebKit watchdog timeout
+          localStorage.removeItem(k);
         }
       }
     } catch (e) {
