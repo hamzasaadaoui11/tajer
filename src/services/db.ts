@@ -32,12 +32,50 @@ class LocalDatabase {
   private memoryCache: Map<string, any> = new Map();
 
   constructor() {
-    // Invalidate cache if another tab or window modifies localStorage
     if (typeof window !== 'undefined') {
+      this.cleanupOversizedLocalStorage();
       window.addEventListener('storage', () => {
         this.clearCache();
       });
       this.loadFromIndexedDB();
+    }
+  }
+
+  /**
+   * One-time purge of legacy heavy base64 strings in localStorage to permanently free quota
+   */
+  public cleanupOversizedLocalStorage(): void {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const keysToClean: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('tajer_db_') || k.includes('products'))) {
+          keysToClean.push(k);
+        }
+      }
+      for (const k of keysToClean) {
+        const val = localStorage.getItem(k);
+        if (val && (val.includes('data:image') || val.length > 300000)) {
+          try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) {
+              const stripped = parsed.map((item: any) => {
+                if (item && item.image_url && item.image_url.startsWith('data:')) {
+                  return { ...item, image_url: '' };
+                }
+                return item;
+              });
+              localStorage.removeItem(k);
+              localStorage.setItem(k, JSON.stringify(stripped));
+            }
+          } catch {
+            localStorage.removeItem(k);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('LocalStorage quota cleanup notice:', e);
     }
   }
 
@@ -63,6 +101,16 @@ class LocalDatabase {
         const current = this.memoryCache.get(key) || [];
         if (current.length === 0 || idbProducts.length >= current.length) {
           this.memoryCache.set(key, idbProducts);
+
+          // Guarantee localStorage has the exact complete list in lightweight format so refresh is 100% instant
+          try {
+            const lightweight = idbProducts.map(p => ({
+              ...p,
+              image_url: (p.image_url && p.image_url.startsWith('data:')) ? '' : p.image_url
+            }));
+            localStorage.removeItem(key);
+            localStorage.setItem(key, JSON.stringify(lightweight));
+          } catch {}
         } else {
           // Merge photos from IndexedDB into memory cache
           const imgMap = new Map<string, string>();
@@ -102,6 +150,12 @@ class LocalDatabase {
       }
       const parsed = data ? JSON.parse(data) : [];
       this.memoryCache.set(cacheKey, parsed);
+
+      // If products were retrieved from localStorage, warm full images from IndexedDB asynchronously
+      if (collection === 'products' && parsed.length > 0 && typeof window !== 'undefined') {
+        this.loadFromIndexedDB();
+      }
+
       return parsed;
     } catch {
       return [];
@@ -112,7 +166,7 @@ class LocalDatabase {
     const cacheKey = `${this.getPrefix()}${collection}`;
     this.memoryCache.set(cacheKey, data);
 
-    // 1. Asynchronously persist full data to IndexedDB (virtually unlimited quota on mobile, gigabytes!)
+    // 1. Asynchronously persist full data (including photos) to IndexedDB (virtually unlimited quota on mobile, gigabytes!)
     if (typeof window !== 'undefined') {
       try {
         idbSet(cacheKey, data).catch(err => {
@@ -121,11 +175,30 @@ class LocalDatabase {
       } catch {}
     }
 
-    // 2. Persist synchronously to localStorage for immediate startup
+    // 2. Persist lightweight data to localStorage for instant startup without crashing mobile 5MB limit
     try {
-      localStorage.setItem(cacheKey, JSON.stringify(data));
+      if (collection === 'products' && Array.isArray(data)) {
+        // Strip heavy base64 images from localStorage copy so mobile quota is never exceeded
+        const lightweight = (data as any[]).map(item => {
+          if (item?.image_url && item.image_url.startsWith('data:')) {
+            return { ...item, image_url: '' };
+          }
+          return item;
+        });
+        localStorage.removeItem(cacheKey);
+        localStorage.setItem(cacheKey, JSON.stringify(lightweight));
+      } else {
+        localStorage.removeItem(cacheKey);
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+      }
     } catch (e) {
-      // Ignore localStorage quota errors since IndexedDB is our primary persistent store
+      // Safe fallback if quota exceeded
+      try {
+        if (Array.isArray(data)) {
+          const stripped = (data as any[]).map(item => item?.image_url ? { ...item, image_url: '' } : item);
+          localStorage.setItem(cacheKey, JSON.stringify(stripped));
+        }
+      } catch {}
     }
   }
 
@@ -572,7 +645,7 @@ class LocalDatabase {
     if (businessId && all.length > 0) {
       let healed = false;
       for (const p of all) {
-        if (!p.business_id || p.business_id !== businessId) {
+        if (!p.business_id) {
           p.business_id = businessId;
           healed = true;
         }

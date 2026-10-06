@@ -197,8 +197,8 @@ export const ProductsView: React.FC = () => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 220;
-          const MAX_HEIGHT = 220;
+          const MAX_WIDTH = 200;
+          const MAX_HEIGHT = 200;
           let width = img.width;
           let height = img.height;
 
@@ -213,12 +213,14 @@ export const ProductsView: React.FC = () => {
               height = MAX_HEIGHT;
             }
           }
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = Math.round(width);
+          canvas.height = Math.round(height);
           const ctx = canvas.getContext('2d');
           if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.52);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.48);
             setImageUrl(dataUrl);
 
             // Compute compressed size
@@ -536,6 +538,7 @@ export const ProductsView: React.FC = () => {
                           src={p.image_url} 
                           alt={p.name} 
                           loading="lazy"
+                          decoding="async"
                           onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
                           className="w-14 h-14 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800 cursor-pointer hover:opacity-95 hover:scale-105 transition shadow-2xs" 
                           title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}
@@ -662,6 +665,7 @@ export const ProductsView: React.FC = () => {
                                 src={p.image_url} 
                                 alt={p.name} 
                                 loading="lazy"
+                                decoding="async"
                                 onClick={(e) => { e.stopPropagation(); setZoomedProduct(p); }}
                                 className="w-12 h-12 rounded-xl object-cover border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-105 transition shadow-xs" 
                                 title={lang === 'ar' ? 'انقر لتكبير الصورة للزبون' : 'Agrandir l\'image'}

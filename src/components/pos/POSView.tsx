@@ -458,6 +458,8 @@ export const POSView: React.FC = () => {
                         <img 
                           src={product.image_url} 
                           alt={product.name} 
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-24 object-cover border border-slate-100 dark:border-slate-800 transition duration-200 group-hover/img:scale-105 shadow-xs" 
                         />
                       ) : (

@@ -359,8 +359,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (isMounted) {
                 setIsOnboardingComplete(res.completed);
                 setIsAuthenticated(true);
-                // Wipe any old product tombstones created during previous outages
-                db.clearAllTombstones('products');
 
                 // Direct online database synchronization before unveiling the view
                 try {
@@ -424,7 +422,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               new Promise(resolve => setTimeout(resolve, 2000))
             ]);
           } catch {}
-          db.clearCache();
+          await db.loadFromIndexedDB();
           setDataVersion(v => v + 1);
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
@@ -491,7 +489,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAuthenticated(true);
         setCurrentView('dashboard');
         // Immediately sync all data on login so all views (including sales history) are instantly populated
-        syncEngine.syncAll().then(syncRes => {
+        syncEngine.syncAll().then(async syncRes => {
+          await db.loadFromIndexedDB();
           if (syncRes.success || syncRes.processed > 0) {
             setDataVersion(v => v + 1);
           }

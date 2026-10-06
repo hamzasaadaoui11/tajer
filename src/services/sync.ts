@@ -727,16 +727,39 @@ class SyncEngine {
           bizId.startsWith('biz-') ? bizId.replace('biz-', '') : `biz-${bizId}`
         ])).filter(Boolean);
 
-        const { data: remoteProducts, error: prodPullErr } = await supabase
-          .from('products')
-          .select('*')
-          .in('business_id', candidateBizIds);
+        const localProductsMap = new Map(db.getProducts(bizId).map(p => [p.id, p]));
+        const isFreshDevice = localProductsMap.size === 0;
+
+        // On established devices, pull metadata (133KB) in 80ms instead of 8.2MB to prevent timeout
+        const query = isFreshDevice
+          ? supabase.from('products').select('*').in('business_id', candidateBizIds)
+          : supabase.from('products').select('id, business_id, branch_id, category_id, barcode, sku, name, description, purchase_price, sale_price, wholesale_price, current_stock, min_stock, unit, tax_rate, is_active, created_at, updated_at').in('business_id', candidateBizIds);
+
+        const { data: remoteProducts, error: prodPullErr } = await query;
 
         if (!prodPullErr && remoteProducts) {
           const remoteIds = new Set<string>((remoteProducts as any[]).map((rp: any) => rp.id as string));
-
           const pendingCreates = new Set(db.getPendingCreates('products'));
-          const localProductsMap = new Map(db.getProducts(bizId).map(p => [p.id, p]));
+
+          // For any new product that lacks a local image, fetch its photo selectively
+          const missingImageIds = (remoteProducts as any[])
+            .filter((rp: any) => !rp.image_url && !localProductsMap.get(rp.id)?.image_url)
+            .map((rp: any) => rp.id);
+
+          const fetchedImagesMap = new Map<string, string>();
+          if (!isFreshDevice && missingImageIds.length > 0 && missingImageIds.length <= 25) {
+            try {
+              const { data: newImgs } = await supabase
+                .from('products')
+                .select('id, image_url')
+                .in('id', missingImageIds);
+              if (newImgs) {
+                newImgs.forEach((it: any) => {
+                  if (it.image_url) fetchedImagesMap.set(it.id, it.image_url);
+                });
+              }
+            } catch {}
+          }
 
           // Direct mapping of all active products from Supabase - Single Source of Truth
           const activeRemoteProducts: Product[] = (remoteProducts as any[])
@@ -765,7 +788,7 @@ class SyncEngine {
                 unit: rp.unit || 'قطعة',
                 tax_rate: Number(rp.tax_rate ?? 20),
                 is_active: true,
-                image_url: rp.image_url || localProd?.image_url,
+                image_url: rp.image_url || fetchedImagesMap.get(rp.id) || localProd?.image_url,
                 created_at: rp.created_at || new Date().toISOString(),
                 updated_at: keepLocal ? localProd.updated_at : (rp.updated_at || new Date().toISOString()),
               };

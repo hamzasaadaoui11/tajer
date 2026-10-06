@@ -298,10 +298,13 @@ export class ThermalPrinterService {
     // 1. Initialize printer: ESC @
     rasterData.push(0x1B, 0x40);
 
-    // 2. Line spacing: ESC 3 0 (minimum line feed)
+    // 2. Set heating parameters for deep dark thermal printing: ESC 7 (8 max dots, 160 heating time, 10 interval)
+    rasterData.push(0x1B, 0x37, 0x08, 0xA0, 0x0A);
+
+    // 3. Line spacing: ESC 3 0 (minimum line feed)
     rasterData.push(0x1B, 0x33, 0x00);
 
-    // 3. GS v 0 Header: GS v 0 m xL xH yL yH
+    // 4. GS v 0 Header: GS v 0 m xL xH yL yH
     const xL = widthBytes % 256;
     const xH = Math.floor(widthBytes / 256);
     const yL = height % 256;
@@ -309,31 +312,54 @@ export class ThermalPrinterService {
 
     rasterData.push(0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH);
 
-    // 4. Pixel data (1 = black dot, 0 = white dot)
+    // 5. Pre-process grayscale luminance map with high contrast for crisp Arabic calligraphy & numbers
+    const gray = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      const idx = i * 4;
+      const a = pixels[idx + 3];
+      if (a < 64) {
+        gray[i] = 255; // White background for transparent pixels
+      } else {
+        const lum = pixels[idx] * 0.299 + pixels[idx + 1] * 0.587 + pixels[idx + 2] * 0.114;
+        // Boost darks and midtones so fine text, table borders, and fonts print solid deep black
+        gray[i] = lum < 210 ? Math.max(0, lum * 0.75) : 255;
+      }
+    }
+
+    // 6. Floyd-Steinberg error diffusion dithering for smooth anti-aliasing and razor-sharp text
+    const bitmap = new Uint8Array(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = y * width + x;
+        const oldVal = gray[idx];
+        const newVal = oldVal < 140 ? 0 : 255;
+        bitmap[idx] = newVal === 0 ? 1 : 0; // 1 = black dot, 0 = white
+        const err = oldVal - newVal;
+
+        if (x + 1 < width) gray[idx + 1] += (err * 7) / 16;
+        if (y + 1 < height) {
+          if (x - 1 >= 0) gray[idx + width - 1] += (err * 3) / 16;
+          gray[idx + width] += (err * 5) / 16;
+          if (x + 1 < width) gray[idx + width + 1] += (err * 1) / 16;
+        }
+      }
+    }
+
+    // 7. Package 1-bit pixel data (1 = black dot, 0 = white dot)
     for (let y = 0; y < height; y++) {
       for (let b = 0; b < widthBytes; b++) {
         let byteVal = 0;
         for (let bit = 0; bit < 8; bit++) {
           const x = b * 8 + bit;
-          if (x < width) {
-            const idx = (y * width + x) * 4;
-            // Grayscale luminance
-            const r = pixels[idx];
-            const g = pixels[idx + 1];
-            const bVal = pixels[idx + 2];
-            const a = pixels[idx + 3];
-            const brightness = (r * 0.299 + g * 0.587 + bVal * 0.114);
-            // Black threshold with alpha check
-            if (a > 128 && brightness < 170) {
-              byteVal |= (1 << (7 - bit));
-            }
+          if (x < width && bitmap[y * width + x] === 1) {
+            byteVal |= (1 << (7 - bit));
           }
         }
         rasterData.push(byteVal);
       }
     }
 
-    // 5. Feed paper and cut (ESC d 4 + GS V 66 0)
+    // 8. Feed paper and partial cut (ESC d 4 + GS V 66 0)
     rasterData.push(0x1B, 0x64, 0x04); // Feed 4 lines
     rasterData.push(0x1D, 0x56, 0x42, 0x00); // Partial cut
 
@@ -430,17 +456,16 @@ export class ThermalPrinterService {
    */
   public async renderElementToCanvas(
     element: HTMLElement, 
-    paperWidth: '58mm' | '80mm' = '80mm',
-    scaleMultiplier: number = 4
+    paperWidth: '58mm' | '80mm' | 'A4' = '80mm',
+    scaleMultiplier: number = 2.0
   ): Promise<HTMLCanvasElement> {
-    // 58mm paper: 384 dots (48mm printable area at 203 DPI)
-    // 80mm paper: 576 dots (72mm printable area at 203 DPI)
-    const baseWidth = paperWidth === '58mm' ? 384 : 576;
+    // 58mm paper: 384 dots, 80mm paper: 576 dots, A4 paper: 794px base
+    const baseWidth = paperWidth === 'A4' ? 794 : paperWidth === '58mm' ? 384 : 576;
     const targetWidth = baseWidth * scaleMultiplier;
     
     // Measure element's rendered on-screen dimensions
     const rect = element.getBoundingClientRect();
-    const sourceWidth = rect.width || (paperWidth === '58mm' ? 220 : 302);
+    const sourceWidth = rect.width || (paperWidth === 'A4' ? 794 : paperWidth === '58mm' ? 220 : 302);
     const sourceHeight = rect.height || element.scrollHeight;
 
     // Off-screen host container matching source element's natural width
@@ -530,21 +555,37 @@ export class ThermalPrinterService {
   public downloadReceiptPdf(
     canvas: HTMLCanvasElement, 
     filename: string = 'ticket', 
-    paperWidth: '58mm' | '80mm' = '80mm'
+    paperWidth: '58mm' | '80mm' | 'A4' = '80mm'
   ): void {
-    const paperWidthMm = paperWidth === '58mm' ? 58 : 80;
+    const isA4 = paperWidth === 'A4';
+    const paperWidthMm = isA4 ? 210 : paperWidth === '58mm' ? 58 : 80;
     const ratio = canvas.height / canvas.width;
-    const paperHeightMm = Math.max(30, Math.round(paperWidthMm * ratio));
+    const paperHeightMm = isA4 ? 297 : Math.max(30, Number((paperWidthMm * ratio).toFixed(2)));
 
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: [paperWidthMm, paperHeightMm]
+      format: [paperWidthMm, paperHeightMm],
+      compress: true
     });
 
-    const imgData = canvas.toDataURL('image/png', 1.0);
-    pdf.addImage(imgData, 'PNG', 0, 0, paperWidthMm, paperHeightMm);
-    pdf.save(`${filename}.pdf`);
+    const imgData = canvas.toDataURL('image/png', 0.95);
+    pdf.addImage(imgData, 'PNG', 0, 0, paperWidthMm, paperHeightMm, undefined, 'FAST');
+    try {
+      const pdfBlob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${filename}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (a.parentNode) document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }, 2000);
+    } catch {
+      pdf.save(`${filename}.pdf`);
+    }
   }
 
   /**
@@ -561,7 +602,7 @@ export class ThermalPrinterService {
     }
 
     try {
-      const canvas = await this.renderElementToCanvas(element, paperWidth, 1.5);
+      const canvas = await this.renderElementToCanvas(element, paperWidth, 1.0);
       const escposData = this.canvasToEscPosRaster(canvas);
       await this.sendChunks(escposData);
       return { success: true };
