@@ -30,6 +30,7 @@ const STORAGE_KEY_PREFIX = 'tajer_db_';
 class LocalDatabase {
   private tenantId: string = localStorage.getItem('tajer_active_tenant') || 'default';
   private memoryCache: Map<string, any> = new Map();
+  private idbListeners: Set<() => void> = new Set();
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -39,6 +40,19 @@ class LocalDatabase {
       });
       this.loadFromIndexedDB();
     }
+  }
+
+  public onIdbLoaded(cb: () => void): () => void {
+    this.idbListeners.add(cb);
+    return () => {
+      this.idbListeners.delete(cb);
+    };
+  }
+
+  private notifyIdbListeners(): void {
+    this.idbListeners.forEach(cb => {
+      try { cb(); } catch {}
+    });
   }
 
   /**
@@ -124,6 +138,7 @@ class LocalDatabase {
           });
           this.memoryCache.set(key, current);
         }
+        this.notifyIdbListeners();
       }
     } catch (e) {
       console.warn('IDB cache warming notice:', e);

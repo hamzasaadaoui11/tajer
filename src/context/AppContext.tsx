@@ -220,6 +220,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return unsub;
   }, []);
 
+  // Reactive listener: whenever IndexedDB finishes warming product photos, immediately refresh views
+  useEffect(() => {
+    const unsub = db.onIdbLoaded(() => {
+      setDataVersion(v => v + 1);
+    });
+    return unsub;
+  }, []);
+
   // Helper to check onboarding across local device AND cloud (Supabase metadata and businesses table)
   const resolveOnboardingStatusAndRestore = async (
     userId: string,
