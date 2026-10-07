@@ -4,9 +4,7 @@
  */
 
 // Permanent hardcoded blocked list requested by admin
-const HARDCODED_BLOCKED_EMAILS = [
-  'zozo@gmail.com'
-];
+const HARDCODED_BLOCKED_EMAILS: string[] = [];
 
 export interface BlockReason {
   ar: string;
