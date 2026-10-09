@@ -600,12 +600,31 @@ class LocalDatabase {
   public updateBusiness(business: Business): void {
     const list = this.get<Business>('businesses');
     const idx = list.findIndex(b => b.id === business.id);
+    const updatedBiz = { ...business, updated_at: new Date().toISOString() };
     if (idx !== -1) {
-      list[idx] = { ...business, updated_at: new Date().toISOString() };
-    } else {
-      list.push({ ...business, updated_at: new Date().toISOString() });
+      list.splice(idx, 1);
     }
+    // Always put active business at index 0 so businesses[0] is guaranteed to be authoritative
+    list.unshift(updatedBiz);
     this.set('businesses', list);
+
+    // Automatically heal any local products that had a mismatched business_id
+    try {
+      const allProds = this.get<Product>('products');
+      if (allProds.length > 0) {
+        let healed = false;
+        const healedProds = allProds.map(p => {
+          if (!p.business_id || p.business_id !== business.id) {
+            healed = true;
+            return { ...p, business_id: business.id };
+          }
+          return p;
+        });
+        if (healed) {
+          this.set('products', healedProds);
+        }
+      }
+    } catch {}
   }
 
   public saveBusiness(business: Business): void {

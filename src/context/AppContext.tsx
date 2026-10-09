@@ -231,25 +231,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Helper to check onboarding across local device AND cloud (Supabase metadata and businesses table)
   const resolveOnboardingStatusAndRestore = async (
     userId: string,
-    userMetadata?: any
+    userMetadata?: any,
+    userEmail?: string
   ): Promise<{ completed: boolean; restoredBusiness?: Business }> => {
-    // 1. If already marked complete in this browser's storage
-    if (db.isOnboardingComplete()) {
-      return { completed: true };
-    }
-
-    // 2. Check Supabase Auth user_metadata
-    const hasMetadataFlag = !!userMetadata?.onboarding_completed;
-
-    // 3. Query Supabase 'businesses' table directly in the cloud
+    // 1. Query Supabase 'businesses' table directly in the cloud first to get the authoritative store
     const supabase = getSupabase();
     if (supabase) {
       try {
-        const { data: remoteBiz, error } = await supabase
-          .from('businesses')
-          .select('*')
-          .or(`id.eq.${userId},id.eq.biz-${userId.substring(0, 8)}`)
-          .maybeSingle();
+        const cleanEmail = (userEmail || '').trim().toLowerCase();
+        let query = supabase.from('businesses').select('*');
+        if (cleanEmail) {
+          query = query.or(`id.eq.${userId},id.eq.biz-${userId.substring(0, 8)},email.eq.${cleanEmail}`);
+        } else {
+          query = query.or(`id.eq.${userId},id.eq.biz-${userId.substring(0, 8)}`);
+        }
+        const { data: remoteBiz, error } = await query.maybeSingle();
 
         if (!error && remoteBiz && remoteBiz.name) {
           const restored: Business = {
@@ -295,7 +291,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const { data: remoteBranches } = await supabase
               .from('branches')
               .select('*')
-              .eq('business_id', userId);
+              .eq('business_id', restored.id);
             if (remoteBranches && remoteBranches.length > 0) {
               for (const rb of remoteBranches) {
                 db.addBranch({
@@ -322,6 +318,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
+    // 2. Fallback to local storage if marked complete
+    if (db.isOnboardingComplete()) {
+      return { completed: true };
+    }
+
+    // 3. Check Supabase Auth user_metadata
+    const hasMetadataFlag = !!userMetadata?.onboarding_completed;
     if (hasMetadataFlag) {
       db.setOnboardingComplete(true);
       syncEngine.syncAll().catch(e => console.warn('Sync on metadata hit notice:', e));
@@ -354,7 +357,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setAuthEmail(session.user.email || '');
 
               // Check if account already completed onboarding in cloud/previous device
-              const res = await resolveOnboardingStatusAndRestore(session.user.id, session.user.user_metadata);
+              const res = await resolveOnboardingStatusAndRestore(session.user.id, session.user.user_metadata, session.user.email);
               if (res.restoredBusiness) {
                 setBusinessState(res.restoredBusiness);
               } else {
@@ -415,7 +418,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setUserState(tenantInit.user);
           setAuthEmail(session.user.email || '');
 
-          const res = await resolveOnboardingStatusAndRestore(session.user.id, session.user.user_metadata);
+          const res = await resolveOnboardingStatusAndRestore(session.user.id, session.user.user_metadata, session.user.email);
           if (res.restoredBusiness) {
             setBusinessState(res.restoredBusiness);
           } else {
@@ -486,7 +489,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAuthEmail(data.user.email || '');
 
         // Resolve onboarding from cloud to see if this account already finished on PC or another phone
-        const res = await resolveOnboardingStatusAndRestore(data.user.id, data.user.user_metadata);
+        const res = await resolveOnboardingStatusAndRestore(data.user.id, data.user.user_metadata, data.user.email);
         if (res.restoredBusiness) {
           setBusinessState(res.restoredBusiness);
         } else {
