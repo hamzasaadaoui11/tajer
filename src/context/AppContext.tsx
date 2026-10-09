@@ -422,12 +422,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setBusinessState(tenantInit.business);
           }
           db.cleanupDemoContacts(res.restoredBusiness?.id || tenantInit.business.id);
+          db.migrateGuestDataTo(session.user.id, res.restoredBusiness?.id || tenantInit.business.id);
           setIsOnboardingComplete(res.completed);
           setIsAuthenticated(true);
           try {
             await Promise.race([
               syncEngine.syncAll(),
-              new Promise(resolve => setTimeout(resolve, 2000))
+              new Promise(resolve => setTimeout(resolve, 6000))
             ]);
           } catch {}
           await db.loadFromIndexedDB();
@@ -492,17 +493,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setBusinessState(tenantInit.business);
         }
         db.cleanupDemoContacts(res.restoredBusiness?.id || tenantInit.business.id);
+        db.migrateGuestDataTo(data.user.id, res.restoredBusiness?.id || tenantInit.business.id);
 
         setIsOnboardingComplete(res.completed);
         setIsAuthenticated(true);
         setCurrentView('dashboard');
-        // Immediately sync all data on login so all views (including sales history) are instantly populated
-        syncEngine.syncAll().then(async syncRes => {
-          await db.loadFromIndexedDB();
-          if (syncRes.success || syncRes.processed > 0) {
-            setDataVersion(v => v + 1);
-          }
-        }).catch(() => {});
+
+        // Await online database synchronization before concluding login so products are ready
+        try {
+          await Promise.race([
+            syncEngine.syncAll(),
+            new Promise(resolve => setTimeout(resolve, 6000))
+          ]);
+        } catch (e) {
+          console.warn('Login sync notice:', e);
+        }
+        await db.loadFromIndexedDB();
+        setDataVersion(v => v + 1);
         return { success: true };
       }
 

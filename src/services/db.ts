@@ -93,6 +93,33 @@ class LocalDatabase {
     }
   }
 
+  public migrateGuestDataTo(newTenantId: string, newBusinessId: string): void {
+    if (!newTenantId || newTenantId === 'default' || typeof window === 'undefined') return;
+    try {
+      const guestKey = 'tajer_db_default_products';
+      const guestRaw = localStorage.getItem(guestKey);
+      if (guestRaw) {
+        const guestProds = JSON.parse(guestRaw);
+        if (Array.isArray(guestProds) && guestProds.length > 0) {
+          const currentTarget = this.get<Product>('products');
+          if (currentTarget.length === 0) {
+            const migrated = guestProds.map(p => ({
+              ...p,
+              business_id: newBusinessId,
+            }));
+            this.set('products', migrated);
+            migrated.forEach(p => {
+              this.addPendingCreate('products', p.id);
+            });
+            localStorage.removeItem(guestKey);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Guest migration notice:', e);
+    }
+  }
+
   public async loadFromIndexedDB(): Promise<void> {
     if (typeof window === 'undefined') return;
     try {
