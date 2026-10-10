@@ -32,9 +32,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({
     // Subscribe to image service updates
     const unsub = imageService.subscribe(() => {
       const updated = imageService.getImage(productId, initialImageUrl);
-      if (updated !== imageUrl) {
-        setImageUrl(updated);
-      }
+      setImageUrl(prev => (prev !== updated ? updated : prev));
     });
 
     return unsub;

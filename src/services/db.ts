@@ -632,12 +632,23 @@ class LocalDatabase {
   }
 
   public getBranches(businessId: string): Branch[] {
-    return this.get<Branch>('branches').filter(b => b.business_id === businessId);
+    const raw = this.get<Branch>('branches').filter(b => b.business_id === businessId);
+    const seen = new Set<string>();
+    return raw.filter(b => {
+      if (!b.id || seen.has(b.id)) return false;
+      seen.add(b.id);
+      return true;
+    });
   }
 
   public addBranch(branch: Branch): void {
     const list = this.get<Branch>('branches');
-    list.push(branch);
+    const idx = list.findIndex(b => b.id === branch.id);
+    if (idx !== -1) {
+      list[idx] = branch;
+    } else {
+      list.push(branch);
+    }
     this.set('branches', list);
   }
 

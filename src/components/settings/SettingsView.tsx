@@ -26,13 +26,15 @@ import {
   HelpCircle,
   Smartphone,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
 import { Category } from '../../types';
 import { thermalPrinterService } from '../../services/thermalPrinter';
 import { ThermalPrinterGuideModal } from '../common/ThermalPrinterGuideModal';
+import { CURRENT_APP_BUILD, forceFullCleanUpdate } from '../../services/appUpdater';
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -70,6 +72,12 @@ export const SettingsView: React.FC = () => {
   const [isTestingPrinter, setIsTestingPrinter] = useState(false);
   const [printerTestMsg, setPrinterTestMsg] = useState<{ success?: boolean; text?: string } | null>(null);
   const [savedPrinter, setSavedPrinter] = useState(thermalPrinterService.getSavedPrinterName());
+  const [isUpdatingApp, setIsUpdatingApp] = useState(false);
+
+  const handleForceCleanUpdate = async () => {
+    setIsUpdatingApp(true);
+    await forceFullCleanUpdate();
+  };
 
   const handleTestPrinter = async () => {
     setIsTestingPrinter(true);
@@ -1114,6 +1122,43 @@ export const SettingsView: React.FC = () => {
                 <span>{printerTestMsg.text}</span>
               </div>
             )}
+            {/* App Version & Self-Healing Cache Section */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <RefreshCw className="w-4 h-4 text-teal-600" />
+                  <span>{lang === 'ar' ? 'تحديث التطبيق ومسح الكاش التلقائي' : 'Mise à jour & Vidage du cache'}</span>
+                </h4>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  Build {CURRENT_APP_BUILD}
+                </span>
+              </div>
+
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                {lang === 'ar'
+                  ? 'يقوم هذا الخيار بمسح ملفات الكاش وتحديث التطبيق لأحدث نسخة سحابية فوراً دون تسجيل الخروج ودون الحاجة لحذف التطبيق أو استخدام المتصفح الخاص.'
+                  : 'Met à jour l\'application et vide le cache du navigateur sans vous déconnecter et sans réinstaller l\'application.'}
+              </p>
+
+              <button
+                type="button"
+                onClick={handleForceCleanUpdate}
+                disabled={isUpdatingApp}
+                className="py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-2 shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {isUpdatingApp ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>{lang === 'ar' ? 'جاري التحديث والتنظيف...' : 'Mise à jour en cours...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>{lang === 'ar' ? 'تحديث التطبيق وتنظيف الكاش بنقرة واحدة' : 'Mettre à jour et vider le cache'}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

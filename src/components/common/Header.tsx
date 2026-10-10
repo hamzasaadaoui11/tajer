@@ -10,10 +10,12 @@ import {
   CheckCircle2, 
   AlertTriangle,
   X,
-  LogOut
+  LogOut,
+  RefreshCw
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Language } from '../../i18n/locales';
+import { forceFullCleanUpdate } from '../../services/appUpdater';
 
 export const Header: React.FC = () => {
   const {
@@ -86,7 +88,7 @@ export const Header: React.FC = () => {
                   <div className="px-2 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     {t('branchesManagement')}
                   </div>
-                  {branches.map(b => (
+                  {branches.filter((b, idx, arr) => arr.findIndex(x => x.id === b.id) === idx).map(b => (
                     <button
                       key={b.id}
                       onClick={() => {
@@ -263,7 +265,18 @@ export const Header: React.FC = () => {
                   >
                     <span>{t('usersManagement')}</span>
                   </button>
-                  <div className="pt-1 border-t border-slate-100 dark:border-slate-700">
+                  <div className="pt-1 border-t border-slate-100 dark:border-slate-700 space-y-0.5">
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        forceFullCleanUpdate();
+                      }}
+                      className={`w-full ${lang === 'ar' ? 'text-right' : 'text-left'} px-3 py-2 rounded-lg text-xs font-semibold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 flex items-center justify-between cursor-pointer`}
+                      title={lang === 'ar' ? 'مسح الكاش وتحديث التطبيق لأحدث نسخة' : 'Actualiser et vider le cache'}
+                    >
+                      <span>{lang === 'ar' ? 'تحديث التطبيق وتنظيف الكاش' : 'Mettre à jour & vider cache'}</span>
+                      <RefreshCw className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                    </button>
                     <button
                       onClick={() => {
                         setShowUserMenu(false);

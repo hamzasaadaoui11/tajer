@@ -1023,7 +1023,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const branches = useMemo(() => {
-    return db.getBranches(business.id);
+    const raw = db.getBranches(business.id);
+    const seen = new Set<string>();
+    return raw.filter(b => {
+      if (!b.id || seen.has(b.id)) return false;
+      seen.add(b.id);
+      return true;
+    });
   }, [business.id, dataVersion]);
 
   // Notifications
