@@ -245,7 +245,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
           query = query.or(`id.eq.${userId},id.eq.biz-${userId.substring(0, 8)}`);
         }
-        const { data: remoteBiz, error } = await query.maybeSingle();
+        // Using limit(1) guarantees it never throws multiple-row errors
+        const { data: bizList, error } = await query.limit(1);
+        const remoteBiz = bizList && bizList.length > 0 ? bizList[0] : null;
 
         if (!error && remoteBiz && remoteBiz.name) {
           const restored: Business = {
@@ -269,7 +271,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             a4Footer: remoteBiz.a4_footer || '',
             bankInfo: remoteBiz.bank_info || '',
             capital: remoteBiz.capital || '',
-            email: remoteBiz.email || '',
+            email: remoteBiz.email || cleanEmail || '',
             taxEnabled: remoteBiz.tax_enabled ?? false,
             defaultTaxRate: Number(remoteBiz.default_tax_rate ?? 20),
             created_at: remoteBiz.created_at || new Date().toISOString(),
@@ -308,10 +310,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           } catch {}
 
-          // Pull products, categories, customers down to this device
+          // Pull products down to this device
           syncEngine.syncAll().catch(e => console.warn('Sync on new device restore notice:', e));
 
           return { completed: true, restoredBusiness: restored };
+        }
+
+        // If no business row yet, check if there are existing products in cloud
+        const candidateBiz = [userId, `biz-${userId.substring(0, 8)}`];
+        const { data: cloudProds } = await supabase
+          .from('products')
+          .select('id, business_id')
+          .in('business_id', candidateBiz)
+          .limit(1);
+
+        if (cloudProds && cloudProds.length > 0) {
+          db.setOnboardingComplete(true);
+          syncEngine.syncAll().catch(() => {});
+          return { completed: true };
         }
       } catch (e) {
         console.warn('Error resolving cloud onboarding status:', e);
@@ -328,6 +344,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (hasMetadataFlag) {
       db.setOnboardingComplete(true);
       syncEngine.syncAll().catch(e => console.warn('Sync on metadata hit notice:', e));
+      return { completed: true };
+    }
+
+    // 4. Authenticated users with email and password are valid store owners
+    if (userId && userEmail) {
+      db.setOnboardingComplete(true);
       return { completed: true };
     }
 
