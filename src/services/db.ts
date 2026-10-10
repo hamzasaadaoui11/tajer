@@ -17,6 +17,7 @@ import {
   PaymentTransaction,
   Expense,
   CashTransaction,
+  CashClosing,
   AuditLog,
   NotificationItem,
   PrintSettings,
@@ -543,6 +544,12 @@ class LocalDatabase {
     if (businesses.length > 0 && (businesses[0].activity === 'grocery' || businesses[0].activity === 'general_store')) {
       businesses[0].activity = '';
       this.set('businesses', businesses);
+    }
+
+    // Clean up duplicate branches so only the primary branch is retained
+    if (branches.length > 1) {
+      branches = [branches[0]];
+      this.set('branches', branches);
     }
 
     return {
@@ -1876,6 +1883,36 @@ class LocalDatabase {
     );
   }
 
+  // --- Daily Cash Register Closing (Clôture de Caisse / Rapport Z) ---
+  public getCashClosings(businessId: string, branchId?: string): CashClosing[] {
+    const all = this.get<CashClosing>('cash_closings').filter(c => !c.business_id || c.business_id === businessId);
+    return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  public saveCashClosing(closing: CashClosing): void {
+    const list = this.get<CashClosing>('cash_closings');
+    const idx = list.findIndex(c => c.id === closing.id);
+    if (idx !== -1) {
+      list[idx] = closing;
+    } else {
+      list.unshift(closing);
+    }
+    this.set('cash_closings', list);
+
+    this.addAuditLog(
+      closing.business_id,
+      closing.user_name,
+      'إغلاق الصندوق اليومي (Clôture Caisse)',
+      `إغلاق الصندوق بتاريخ ${closing.closing_date} - رصيد نظري: ${closing.theoretical_balance} DH - رصيد فعلي: ${closing.actual_balance} DH (الفارق: ${closing.difference} DH)`
+    );
+  }
+
+  public deleteCashClosing(id: string): void {
+    let list = this.get<CashClosing>('cash_closings');
+    list = list.filter(c => c.id !== id);
+    this.set('cash_closings', list);
+  }
+
   // --- Notifications ---
   public getNotifications(businessId: string): NotificationItem[] {
     return this.get<NotificationItem>('notifications')
@@ -1959,6 +1996,7 @@ class LocalDatabase {
       'stock_adjustments',
       'expenses',
       'cash_transactions',
+      'cash_closings',
       'payments',
       'audit_logs',
       'notifications'

@@ -314,6 +314,29 @@ export interface CashTransaction {
   created_at: string;
 }
 
+export interface CashClosing {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  closing_date: string; // YYYY-MM-DD
+  closed_at: string; // ISO string
+  user_name: string;
+  opening_balance: number; // Solde initial
+  total_cash_sales: number; // Ventes espèces
+  total_card_sales: number; // Ventes carte / virement
+  total_credit_sales: number; // Ventes crédit
+  total_cash_in: number; // Entrées manuelles
+  total_debt_recovered: number; // Recouvrements dettes en espèces
+  total_cash_out: number; // Sorties / Retraits manuels
+  total_expenses: number; // Dépenses réglées en espèces
+  theoretical_balance: number; // Solde théorique attendu
+  actual_balance: number; // Montant réel compté
+  difference: number; // Écart (Réel - Théorique)
+  sales_count: number;
+  notes?: string;
+  created_at: string;
+}
+
 export interface AuditLog {
   id: string;
   business_id: string;

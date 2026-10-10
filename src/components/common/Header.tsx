@@ -20,9 +20,6 @@ import { forceFullCleanUpdate } from '../../services/appUpdater';
 export const Header: React.FC = () => {
   const {
     business,
-    branch,
-    branches,
-    setBranch,
     user,
     lang,
     setLang,
@@ -39,7 +36,6 @@ export const Header: React.FC = () => {
   } = useApp();
 
   const [showNotifMenu, setShowNotifMenu] = useState(false);
-  const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -65,50 +61,13 @@ export const Header: React.FC = () => {
                   {business.currency}
                 </span>
               </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
-                <span className="truncate max-w-[90px] sm:max-w-none">
-                  {lang === 'fr' && branch.name === 'الفرع الرئيسي' ? 'Succursale principale' : branch.name}
-                </span>
-                {branches.length > 1 && <span className="text-[10px] text-teal-600 shrink-0">({branches.length})</span>}
-              </div>
-            </div>
-          </button>
-
-          {/* Branch Selector Dropdown (if multi-branch) */}
-          {branches.length > 1 && (
-            <div className="relative shrink-0">
-              <button
-                onClick={() => setShowBranchMenu(!showBranchMenu)}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs flex items-center gap-1 border border-slate-200 dark:border-slate-700"
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-              {showBranchMenu && (
-                <div className="absolute top-full mt-1.5 start-0 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-1.5 z-50">
-                  <div className="px-2 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    {t('branchesManagement')}
-                  </div>
-                  {branches.filter((b, idx, arr) => arr.findIndex(x => x.id === b.id) === idx).map(b => (
-                    <button
-                      key={b.id}
-                      onClick={() => {
-                        setBranch(b);
-                        setShowBranchMenu(false);
-                      }}
-                      className={`w-full text-right px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between ${
-                        b.id === branch.id
-                          ? 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-400 font-bold'
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
-                      }`}
-                    >
-                      <span>{b.name}</span>
-                      {b.id === branch.id && <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />}
-                    </button>
-                  ))}
+              {business.city && (
+                <div className="text-[11px] text-slate-400 truncate">
+                  {business.city}
                 </div>
               )}
             </div>
-          )}
+          </button>
         </div>
 
         {/* Left side in RTL (Controls, Notifications, Profile) */}

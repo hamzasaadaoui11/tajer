@@ -14,7 +14,8 @@ import {
   ChevronLeft,
   Receipt,
   Clock,
-  Sparkles
+  Sparkles,
+  Package
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
@@ -82,6 +83,10 @@ export const DashboardView: React.FC = () => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 4);
 
+    // Stock Valuation (At purchase price and sale price)
+    const stockPurchaseValue = allProducts.reduce((acc, p) => acc + (Math.max(0, p.current_stock) * (p.purchase_price || 0)), 0);
+    const stockSaleValue = allProducts.reduce((acc, p) => acc + (Math.max(0, p.current_stock) * (p.sale_price || 0)), 0);
+
     return {
       todaySalesCount: todaySales.length,
       todaySalesTotal,
@@ -89,6 +94,9 @@ export const DashboardView: React.FC = () => {
       currentCash,
       totalCustomerDebt,
       totalSupplierDebt,
+      stockPurchaseValue,
+      stockSaleValue,
+      productsCount: allProducts.length,
       lowStockCount: lowStockProducts.length,
       lowStockProducts: lowStockProducts.slice(0, 3),
       recentSales: allSales.slice(0, 5),
@@ -214,7 +222,7 @@ export const DashboardView: React.FC = () => {
             {formatCurrency(metrics.currentCash)}
           </div>
           <div className="mt-2 text-[11px] text-blue-600 font-semibold flex items-center gap-1">
-            <span>{lang === 'ar' ? 'عرض تفاصيل الصندوق' : 'Voir les détails de la caisse'}</span>
+            <span>{lang === 'ar' ? 'تفاصيل وإغلاق الصندوق' : 'Détails & Clôture de caisse'}</span>
             <ChevronLeft className="w-3 h-3" />
           </div>
         </div>
@@ -236,6 +244,38 @@ export const DashboardView: React.FC = () => {
           <div className="mt-2 text-[11px] text-amber-600 font-semibold flex items-center gap-1">
             <span>{lang === 'ar' ? 'استخلاص الديون الآن' : 'Recouvrer les créances maintenant'}</span>
             <ChevronLeft className="w-3 h-3" />
+          </div>
+        </div>
+      </div>
+
+      {/* Stock Valuation Summary Banner */}
+      <div 
+        onClick={() => setCurrentView('products')}
+        className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs cursor-pointer hover:border-teal-500/60 transition group"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+              <Package className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 font-bold">
+                {lang === 'ar' ? 'تقييم رأس مال المخزون الحالي بالمحل' : 'Valorisation du Stock Actuel'}
+              </div>
+              <div className="text-sm sm:text-base font-black text-slate-900 dark:text-white flex flex-wrap items-center gap-2 mt-0.5">
+                <span>{lang === 'ar' ? 'قيمة الشراء (رأس المال):' : "Valeur d'achat (Capital) :"}</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-black">{formatCurrency(metrics.stockPurchaseValue)}</span>
+                <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">|</span>
+                <span className="text-xs text-slate-500 font-bold">
+                  {lang === 'ar' ? 'قيمة البيع المتوقعة:' : 'Valeur de vente :'} {formatCurrency(metrics.stockSaleValue)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 self-start sm:self-auto text-xs font-bold text-teal-600 dark:text-teal-400 group-hover:translate-x-[-4px] transition-transform">
+            <span>{lang === 'ar' ? `إدارة المخزون (${metrics.productsCount} سلعة)` : `Gérer le stock (${metrics.productsCount} articles)`}</span>
+            <ChevronLeft className="w-4 h-4" />
           </div>
         </div>
       </div>
