@@ -197,7 +197,9 @@ export interface Sale {
   status: SaleStatus;
   user_name: string;
   notes?: string;
+  tax_rate?: number;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface SaleReturnItem {

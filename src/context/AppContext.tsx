@@ -239,15 +239,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (supabase) {
       try {
         const cleanEmail = (userEmail || '').trim().toLowerCase();
-        let query = supabase.from('businesses').select('*');
+        let query = supabase.from('businesses').select('*').order('created_at', { ascending: false });
         if (cleanEmail) {
           query = query.or(`id.eq.${userId},id.eq.biz-${userId.substring(0, 8)},email.eq.${cleanEmail}`);
         } else {
           query = query.or(`id.eq.${userId},id.eq.biz-${userId.substring(0, 8)}`);
         }
-        // Using limit(1) guarantees it never throws multiple-row errors
-        const { data: bizList, error } = await query.limit(1);
-        const remoteBiz = bizList && bizList.length > 0 ? bizList[0] : null;
+        const { data: bizList, error } = await query;
+        let remoteBiz = null;
+
+        if (!error && bizList && bizList.length > 0) {
+          if (bizList.length === 1) {
+            remoteBiz = bizList[0];
+          } else {
+            // Find the active business that actually contains products in the cloud
+            for (const b of bizList) {
+              const { data: pCheck } = await supabase.from('products').select('id').eq('business_id', b.id).limit(1);
+              if (pCheck && pCheck.length > 0) {
+                remoteBiz = b;
+                break;
+              }
+            }
+            if (!remoteBiz) {
+              remoteBiz = bizList[0];
+            }
+          }
+        }
 
         if (!error && remoteBiz && remoteBiz.name) {
           const restored: Business = {

@@ -15,7 +15,8 @@ import {
   CreditCard,
   DollarSign,
   Trash2,
-  Loader2
+  Loader2,
+  Edit2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
@@ -23,6 +24,7 @@ import { Sale, SaleReturn, PaymentMethod } from '../../types';
 import { generateSaleWhatsAppText, openWhatsApp } from '../../services/whatsapp';
 import { formatMAD } from '../../i18n/locales';
 import { syncEngine } from '../../services/sync';
+import { EditSaleModal } from './EditSaleModal';
 
 export const SalesView: React.FC = () => {
   const { business, branch, user, formatCurrency, setActiveSaleReceipt, refreshData, dataVersion, lang } = useApp();

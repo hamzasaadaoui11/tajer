@@ -1433,6 +1433,106 @@ class LocalDatabase {
     return { success: true, sale, restoredItemsCount: totalRestoredQty };
   }
 
+  // Update Sale (Modify items, quantities, add new products, payment method)
+  public updateSale(
+    saleId: string,
+    newItems: SaleItem[],
+    newPaymentMethod: PaymentMethod,
+    newAmountPaid: number,
+    newNotes: string,
+    userName: string
+  ): { success: boolean; sale?: Sale } {
+    const sales = this.get<Sale>('sales');
+    const sIdx = sales.findIndex(s => s.id === saleId);
+    if (sIdx === -1) return { success: false };
+
+    const oldSale = sales[sIdx];
+    const products = this.get<Product>('products');
+    const effectiveBranchId = oldSale.branch_id;
+
+    // 1. Revert old stock changes (add back old items)
+    for (const oldItem of oldSale.items) {
+      const pIdx = products.findIndex(p => p.id === oldItem.product_id);
+      if (pIdx !== -1) {
+        products[pIdx].current_stock += oldItem.quantity;
+        products[pIdx].updated_at = new Date().toISOString();
+        this.addPendingCreate('products', products[pIdx].id);
+      }
+    }
+
+    // 2. Apply new stock changes (subtract new items)
+    let newSubtotal = 0;
+    for (const newItem of newItems) {
+      newSubtotal += newItem.total;
+      const pIdx = products.findIndex(p => p.id === newItem.product_id);
+      if (pIdx !== -1) {
+        products[pIdx].current_stock = Math.max(0, products[pIdx].current_stock - newItem.quantity);
+        products[pIdx].updated_at = new Date().toISOString();
+        this.addPendingCreate('products', products[pIdx].id);
+      }
+    }
+    this.set('products', products);
+
+    // 3. Calculate new total with tax if enabled
+    const taxRate = oldSale.tax_rate || 0;
+    const taxTotal = (newSubtotal * taxRate) / 100;
+    const newTotal = newSubtotal + taxTotal;
+    const newAmountDue = newPaymentMethod === 'CREDIT' ? newTotal : Math.max(0, newTotal - newAmountPaid);
+
+    // 4. Update Sale record
+    oldSale.items = newItems;
+    oldSale.subtotal = newSubtotal;
+    oldSale.tax_total = taxTotal;
+    oldSale.total = newTotal;
+    oldSale.payment_method = newPaymentMethod;
+    oldSale.amount_paid = newPaymentMethod === 'CREDIT' ? 0 : newAmountPaid;
+    oldSale.amount_due = newAmountDue;
+    oldSale.notes = newNotes;
+    oldSale.updated_at = new Date().toISOString();
+
+    sales[sIdx] = oldSale;
+    this.set('sales', sales);
+    this.addPendingCreate('sales', oldSale.id);
+
+    // 5. Adjust cash transaction if cash amount changed
+    if (newPaymentMethod === 'CASH' || newPaymentMethod === 'SPLIT') {
+      let cashList = this.get<CashTransaction>('cash_transactions');
+      const cIdx = cashList.findIndex(c => c.reference === oldSale.invoice_number);
+      if (cIdx !== -1) {
+        cashList[cIdx].amount = oldSale.amount_paid;
+        cashList[cIdx].description = `مقبوضات بيع ${oldSale.invoice_number} (تعديل)`;
+      } else {
+        const currentCash = this.getCurrentCashBalance(oldSale.business_id, effectiveBranchId);
+        cashList.unshift({
+          id: 'cash-' + Date.now(),
+          business_id: oldSale.business_id,
+          branch_id: effectiveBranchId,
+          type: 'IN',
+          category: 'SALE',
+          amount: oldSale.amount_paid,
+          balance_after: currentCash + oldSale.amount_paid,
+          reference: oldSale.invoice_number,
+          description: `مقبوضات بيع ${oldSale.invoice_number} (تعديل)`,
+          user_name: userName,
+          created_at: new Date().toISOString(),
+        });
+      }
+      this.set('cash_transactions', cashList);
+    }
+
+    // 6. Reconcile customer debts
+    this.reconcileCustomerDebts(oldSale.business_id);
+
+    this.addAuditLog(
+      oldSale.business_id,
+      userName,
+      'تعديل فاتورة بيع',
+      `تم تعديل الفاتورة ${oldSale.invoice_number} - المجموع الجديد: ${newTotal} DH`
+    );
+
+    return { success: true, sale: oldSale };
+  }
+
   // --- Sales Return ---
   public createSaleReturn(returnData: SaleReturn): void {
     const returns = this.get<SaleReturn>('sale_returns');
