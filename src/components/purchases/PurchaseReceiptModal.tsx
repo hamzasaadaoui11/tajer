@@ -33,6 +33,8 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
   onClose
 }) => {
   const { business, lang } = useApp();
+  const activeInvoiceColor = business.invoiceColor || '#C02626';
+  const activeLogoSize = business.logoSize || 85;
   const [paperFormat, setPaperFormat] = useState<'80mm' | '58mm' | 'A4'>('80mm');
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [a4Scale, setA4Scale] = useState(0.45);
@@ -533,13 +535,25 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
               >
                 <div>
                   {/* Top Header: Business Name Right & BON DE RECEPTION Left */}
-                  <div style={{ borderColor: business.invoiceColor || '#C02626' }} className="flex justify-between items-start pb-6 border-b-2">
+                  <div style={{ borderColor: activeInvoiceColor }} className="flex justify-between items-start pb-6 border-b-2">
                     <div className={`${lang === 'ar' ? 'text-right' : 'text-left'} flex items-start gap-4`}>
                       {business.logo && (
-                        <img src={business.logo} alt="Company Logo" className="w-16 h-16 rounded-xl object-contain border border-slate-100 bg-slate-50 p-1 shrink-0" />
+                        <div className="shrink-0 flex items-center justify-center">
+                          <img
+                            src={business.logo}
+                            alt="Company Logo"
+                            style={{
+                              height: `${activeLogoSize}px`,
+                              maxHeight: `${activeLogoSize}px`,
+                              maxWidth: `${Math.round(activeLogoSize * 2.4)}px`,
+                              objectFit: 'contain'
+                            }}
+                            className="block"
+                          />
+                        </div>
                       )}
                       <div>
-                        <h1 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black tracking-tight">
+                        <h1 style={{ color: activeInvoiceColor }} className="text-3xl font-black tracking-tight">
                           {business.name}
                         </h1>
                         {business.activity ? (
@@ -557,7 +571,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                     </div>
 
                     <div className={lang === 'ar' ? 'text-left' : 'text-right'}>
-                      <h2 style={{ color: business.invoiceColor || '#C02626' }} className="text-3xl font-black tracking-wider">
+                      <h2 style={{ color: activeInvoiceColor }} className="text-3xl font-black tracking-wider">
                         {lang === 'ar' ? 'وصل استلام ومشتريات' : "Bon d'achat & de réception"}
                       </h2>
                       <p className="text-xs font-bold text-slate-500 mt-0.5">
@@ -576,7 +590,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                   <div className={`grid grid-cols-2 gap-6 my-6 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                     {/* Fournisseur */}
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                      <div style={{ color: business.invoiceColor || '#C02626' }} className="text-[10px] font-bold tracking-wider mb-1">
+                      <div style={{ color: activeInvoiceColor }} className="text-[10px] font-bold tracking-wider mb-1">
                         {lang === 'ar' ? 'المورد / الموزع :' : 'Fournisseur / Distributeur :'}
                       </div>
                       <div className="font-extrabold text-slate-900 text-sm">
@@ -624,7 +638,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                   {/* Articles Table */}
                   <table className={`w-full border-collapse my-6 border border-slate-200 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                     <thead>
-                      <tr style={{ backgroundColor: business.invoiceColor || '#C02626' }} className="text-white text-xs font-extrabold tracking-wider">
+                      <tr style={{ backgroundColor: activeInvoiceColor }} className="text-white text-xs font-extrabold tracking-wider">
                         <th className={`py-2.5 px-3 rounded-r whitespace-nowrap ${lang === 'ar' ? 'text-right' : 'text-left'}`}>{lang === 'ar' ? 'السلعة / البيان' : 'Désignation / Article'}</th>
                         <th className="py-2.5 px-3 text-center w-24 whitespace-nowrap">{lang === 'ar' ? 'الكمية' : 'Qté'}</th>
                         <th className={`py-2.5 px-3 w-32 whitespace-nowrap ${lang === 'ar' ? 'text-left' : 'text-right'}`}>{lang === 'ar' ? 'ثمن الشراء' : 'Prix d\'achat'}</th>
@@ -698,7 +712,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                         )}
                         <div className="flex justify-between py-2 text-sm font-black text-slate-900 border-t border-slate-300">
                           <span>{lang === 'ar' ? 'الإجمالي الصافي :' : 'Total Net :'}</span>
-                          <span style={{ color: business.invoiceColor || '#C02626' }} className="font-mono text-base font-bold">
+                          <span style={{ color: activeInvoiceColor }} className="font-mono text-base font-bold">
                             {formatMAD(purchase.total, lang)}
                           </span>
                         </div>

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.businesses (
     patente TEXT,
     cnss TEXT,
     logo TEXT,
+    logo_size NUMERIC DEFAULT 85,
     stamp TEXT,
     invoice_color TEXT DEFAULT '#C02626',
     receipt_footer TEXT,
@@ -45,6 +46,7 @@ ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS rc TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS patente TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS cnss TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS logo TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS logo_size NUMERIC DEFAULT 85;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS stamp TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS invoice_color TEXT DEFAULT '#C02626';
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS receipt_footer TEXT;

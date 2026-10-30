@@ -276,6 +276,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ? false
             : (remoteBiz.stamp_enabled ?? (localBiz?.stampEnabled ?? true));
 
+          const finalInvoiceColor = (localBiz?.invoiceColor && localBiz.invoiceColor.trim())
+            ? localBiz.invoiceColor
+            : ((remoteBiz.invoice_color && remoteBiz.invoice_color.trim()) ? remoteBiz.invoice_color : '#C02626');
+
+          const finalLogoSize = Number(localBiz?.logoSize ?? remoteBiz.logo_size ?? 85);
+
           const restored: Business = {
             id: remoteBiz.id,
             name: remoteBiz.name,
@@ -290,9 +296,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             patente: remoteBiz.patente || '',
             cnss: remoteBiz.cnss || '',
             logo: finalLogo,
+            logoSize: finalLogoSize,
             stamp: finalStamp,
             stampEnabled: finalStampEnabled,
-            invoiceColor: remoteBiz.invoice_color || '#C02626',
+            invoiceColor: finalInvoiceColor,
             receiptFooter: remoteBiz.receipt_footer || '',
             a4Footer: remoteBiz.a4_footer || '',
             bankInfo: remoteBiz.bank_info || '',
@@ -305,8 +312,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
 
           db.saveBusiness(restored);
-          // If local had a logo or stamp that was not in Supabase yet, push it up to Supabase immediately
-          if ((!remoteBiz.logo && finalLogo) || (!remoteBiz.stamp && finalStamp)) {
+          // If local had a logo, stamp, or invoiceColor that was not in Supabase yet, push it up to Supabase immediately
+          if (
+            (!remoteBiz.logo && finalLogo) || 
+            (!remoteBiz.stamp && finalStamp) ||
+            (!remoteBiz.invoice_color && finalInvoiceColor && finalInvoiceColor !== '#C02626')
+          ) {
             syncEngine.saveBusinessEverywhere(restored).catch(() => {});
           }
 
@@ -1008,6 +1019,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       city: bizData.city !== undefined ? bizData.city : (business.city || ''),
       address: bizData.address !== undefined ? bizData.address : (business.address || ''),
     };
+
+
     setBusinessState(updated);
     db.saveBusiness(updated);
     if (user && bizData.name) {

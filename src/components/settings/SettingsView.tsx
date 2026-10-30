@@ -58,7 +58,7 @@ export const SettingsView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'store' | 'general' | 'categories' | 'security'>('store');
-  const [storeSection, setStoreSection] = useState<'branding' | 'general' | 'legal' | 'footer'>('branding');
+  const [storeSection, setStoreSection] = useState<'general' | 'legal' | 'footer'>('general');
 
   // Password Change State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -145,6 +145,10 @@ export const SettingsView: React.FC = () => {
   const [receiptFooter, setReceiptFooter] = useState(business.receiptFooter || '');
   const [a4Footer, setA4Footer] = useState(business.a4Footer || '');
   const [logo, setLogo] = useState(business.logo || '');
+  const [logoSize, setLogoSize] = useState<number>(
+    business.logoSize || (typeof window !== 'undefined' ? Number(localStorage.getItem('tajer_logo_size') || 85) : 85)
+  );
+  const [logoSizeSaving, setLogoSizeSaving] = useState(false);
   const [stamp, setStamp] = useState(business.stamp === 'DISABLED' ? '' : (business.stamp || ''));
   const [stampEnabled, setStampEnabled] = useState(
     business.stampEnabled !== undefined
@@ -194,6 +198,7 @@ export const SettingsView: React.FC = () => {
     if (business.receiptFooter !== undefined) setReceiptFooter(business.receiptFooter || '');
     if (business.a4Footer !== undefined) setA4Footer(business.a4Footer || '');
     if (business.logo !== undefined) setLogo(business.logo || '');
+    if (business.logoSize !== undefined) setLogoSize(business.logoSize);
     if (business.stamp !== undefined) setStamp(business.stamp === 'DISABLED' ? '' : (business.stamp || ''));
     if (business.stampEnabled !== undefined) setStampEnabled(business.stampEnabled);
     if (business.invoiceColor !== undefined) setInvoiceColor(business.invoiceColor || '#C02626');
@@ -214,6 +219,7 @@ export const SettingsView: React.FC = () => {
     business.receiptFooter,
     business.a4Footer,
     business.logo,
+    business.logoSize,
     business.stamp,
     business.stampEnabled,
     business.invoiceColor,
@@ -337,6 +343,8 @@ export const SettingsView: React.FC = () => {
       await updateBusiness({ invoiceColor: newColor });
       setColorSaved(true);
       setTimeout(() => setColorSaved(false), 3000);
+    } catch (e) {
+      console.warn('Error saving color:', e);
     } finally {
       setColorSaving(false);
     }
@@ -358,6 +366,19 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  // Instant save logo display size on invoices
+  const handleLogoSizeChange = async (newSize: number) => {
+    setLogoSize(newSize);
+    setLogoSizeSaving(true);
+    try {
+      await updateBusiness({ logoSize: newSize });
+    } catch (e) {
+      console.warn('Error saving logoSize:', e);
+    } finally {
+      setTimeout(() => setLogoSizeSaving(false), 400);
+    }
+  };
+
   // Direct branding save button
   const handleSaveBrandingNow = async () => {
     setBrandingSaving(true);
@@ -365,6 +386,7 @@ export const SettingsView: React.FC = () => {
     try {
       await updateBusiness({
         logo,
+        logoSize,
         stamp: stampEnabled ? stamp : 'DISABLED',
         stampEnabled,
         invoiceColor,
@@ -470,7 +492,7 @@ export const SettingsView: React.FC = () => {
     }
   };
 
-  // Quick save for General Store Information
+  // Quick save for General Store Information & Branding
   const handleSaveGeneralNow = async () => {
     setGeneralSaving(true);
     setGeneralSaved(false);
@@ -481,6 +503,11 @@ export const SettingsView: React.FC = () => {
         phone: phone.trim(),
         city: city.trim(),
         address: address.trim(),
+        logo,
+        logoSize,
+        stamp: stampEnabled ? stamp : 'DISABLED',
+        stampEnabled,
+        invoiceColor,
       });
       setGeneralSaving(false);
       if (res && res.success === false) {
@@ -517,6 +544,7 @@ export const SettingsView: React.FC = () => {
         receiptFooter,
         a4Footer,
         logo,
+        logoSize,
         stamp: stampEnabled ? stamp : 'DISABLED',
         stampEnabled,
         invoiceColor,
@@ -653,13 +681,8 @@ export const SettingsView: React.FC = () => {
           <div className="flex flex-col gap-2 w-full text-xs font-bold">
             {[
               { 
-                id: 'branding', 
-                label: lang === 'ar' ? 'الهوية البصرية واللوجو' : 'Identité visuelle & Logo', 
-                icon: Palette 
-              },
-              { 
                 id: 'general', 
-                label: lang === 'ar' ? 'المعلومات العامة للمحل' : 'Informations générales du magasin', 
+                label: lang === 'ar' ? 'معلومات المحل، الشعار والهوية البصرية' : 'Informations du magasin, Logo & Identité', 
                 icon: Store 
               },
               { 
@@ -707,75 +730,207 @@ export const SettingsView: React.FC = () => {
 
           {/* Store Sections Content Switch */}
           <div className="pt-2 animate-in fade-in-50 duration-200">
-            {storeSection === 'branding' && (
-              /* Logo & Custom Invoice Theme Color Section */
-              <div className="space-y-4">
+            {storeSection === 'general' && (
+              <div className="space-y-6">
+                {/* 1. Informations Générales du Magasin */}
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 space-y-4">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Store className="w-4 h-4 text-teal-600" />
+                    <span>{lang === 'ar' ? 'معلومات وبيانات المحل الأساسية' : 'Coordonnées du magasin'}</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        {lang === 'ar' ? 'اسم المحل أو المتجر *' : 'Nom du magasin / Enseigne *'}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        {lang === 'ar' ? 'نوع النشاط' : 'Secteur d\'activité'}
+                      </label>
+                      <input
+                        type="text"
+                        value={activity}
+                        onChange={e => setActivity(e.target.value as any)}
+                        placeholder={lang === 'ar' ? 'بقالة ومواد غذائية، ملابس، عقاقير...' : 'Épicerie, prêt-à-porter, quincaillerie...'}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        {lang === 'ar' ? 'رقم الهاتف (يظهر في التذكرة)' : 'Téléphone (affiché sur le ticket)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-mono text-left text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        {lang === 'ar' ? 'المدينة' : 'Ville'}
+                      </label>
+                      <input
+                        type="text"
+                        value={city}
+                        onChange={e => setCity(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        {lang === 'ar' ? 'العنوان الكامل للمحل' : 'Adresse complète du magasin'}
+                      </label>
+                      <input
+                        type="text"
+                        value={address}
+                        onChange={e => setAddress(e.target.value)}
+                        placeholder={lang === 'ar' ? 'مثال: زنقة 15، حي الأمل...' : 'Ex: Rue 15, Quartier...'}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Logo & Custom Invoice Theme Color Section */}
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 space-y-4">
                   <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                     <Palette className="w-4 h-4 text-teal-600" />
-                    <span>{lang === 'ar' ? 'هوية المتجر وشعار الشركة (Logo & Brand Color)' : 'Identité visuelle & Logo (Thème et couleurs)'}</span>
+                    <span>{lang === 'ar' ? 'شعار المحل والهوية البصرية (Logo & Brand Color)' : 'Identité visuelle & Logo (Thème et couleurs)'}</span>
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {/* Logo Upload Card */}
-                    <div className={`p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-150 dark:border-slate-700/60 flex items-center gap-3.5 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-                      {logo ? (
-                        <div className="relative group shrink-0">
-                          <img
-                            src={logo}
-                            alt="Company Logo"
-                            className="w-16 h-16 rounded-xl object-contain border border-slate-100 bg-slate-50 p-1"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleRemoveLogo}
-                            disabled={logoSaving}
-                            className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 text-white shadow-xs hover:bg-rose-700 transition cursor-pointer disabled:opacity-50"
-                            title={lang === 'ar' ? 'حذف الشعار' : 'Supprimer le logo'}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-900 text-slate-400 shrink-0">
-                          <Image className="w-6 h-6 stroke-1" />
-                        </div>
-                      )}
-                      
-                      <div className="flex-1 min-w-0">
-                        <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                          {lang === 'ar' ? 'شعار الشركة / المحل' : 'Logo du magasin'}
-                        </span>
-                        <span className="block text-[10px] text-slate-400 mt-0.5">
-                          {lang === 'ar' ? 'صيغة PNG أو JPG أو SVG (يُحفظ تلقائياً)' : 'Format PNG, JPG ou SVG (auto-sauvegardé)'}
-                        </span>
-
-                        {logoSaving && (
-                          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-amber-600 dark:text-amber-400 font-semibold animate-pulse">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>{lang === 'ar' ? 'جاري الحفظ في قاعدة البيانات...' : 'Sauvegarde dans la base de données...'}</span>
+                    {/* Logo Upload Card with Size Controls */}
+                    <div className={`p-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-150 dark:border-slate-700/60 flex flex-col justify-between gap-3 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+                      <div className="flex items-start gap-3.5">
+                        {logo ? (
+                          <div className="relative group shrink-0 p-1">
+                            <img
+                              src={logo}
+                              alt="Company Logo"
+                              style={{
+                                height: '56px',
+                                maxWidth: '110px',
+                                objectFit: 'contain'
+                              }}
+                              className="block"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleRemoveLogo}
+                              disabled={logoSaving}
+                              className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 text-white shadow-xs hover:bg-rose-700 transition cursor-pointer disabled:opacity-50"
+                              title={lang === 'ar' ? 'حذف الشعار' : 'Supprimer le logo'}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           </div>
-                        )}
-
-                        {logoSaved && !logoSaving && (
-                          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-bold animate-in fade-in">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>{lang === 'ar' ? '✓ تم حفظ الشعار سحابياً بنجاح!' : '✓ Logo enregistré avec succès !'}</span>
+                        ) : (
+                          <div className="w-14 h-14 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-900 text-slate-400 shrink-0">
+                            <Image className="w-6 h-6 stroke-1" />
                           </div>
                         )}
                         
-                        <label className={`inline-block mt-2 px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-[11px] font-bold cursor-pointer transition ${logoSaving ? 'opacity-50 pointer-events-none' : ''}`}>
-                          <Upload className="w-3 h-3 inline-block me-1" />
-                          <span>{logo ? (lang === 'ar' ? 'تغيير الشعار' : 'Changer le logo') : (lang === 'ar' ? 'تحميل الشعار' : 'Téléverser le logo')}</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            disabled={logoSaving}
-                            onChange={handleLogoUpload}
-                            className="hidden"
-                          />
-                        </label>
+                        <div className="flex-1 min-w-0">
+                          <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                            {lang === 'ar' ? 'شعار الشركة / المحل (Logo)' : 'Logo du magasin'}
+                          </span>
+                          <span className="block text-[10px] text-slate-400 mt-0.5">
+                            {lang === 'ar' ? 'يظهر مستقلاً بدون أي إطار مربع' : 'Affiché sans cadre carré'}
+                          </span>
+
+                          {logoSaving && (
+                            <div className="flex items-center gap-1.5 mt-1.5 text-xs text-amber-600 dark:text-amber-400 font-semibold animate-pulse">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>{lang === 'ar' ? 'جاري الحفظ في قاعدة البيانات...' : 'Sauvegarde dans la base de données...'}</span>
+                            </div>
+                          )}
+
+                          {logoSaved && !logoSaving && (
+                            <div className="flex items-center gap-1.5 mt-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-bold animate-in fade-in">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>{lang === 'ar' ? '✓ تم حفظ الشعار سحابياً بنجاح!' : '✓ Logo enregistré avec succès !'}</span>
+                            </div>
+                          )}
+                          
+                          <label className={`inline-block mt-2 px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-[11px] font-bold cursor-pointer transition ${logoSaving ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <Upload className="w-3 h-3 inline-block me-1" />
+                            <span>{logo ? (lang === 'ar' ? 'تغيير الشعار' : 'Changer le logo') : (lang === 'ar' ? 'تحميل الشعار' : 'Téléverser le logo')}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              disabled={logoSaving}
+                              onChange={handleLogoUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
                       </div>
+
+                      {/* Logo Size Slider & Presets */}
+                      {logo && (
+                        <div className="pt-2.5 border-t border-slate-100 dark:border-slate-700/60 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                              <span>{lang === 'ar' ? 'حجم اللوجو في الفاتورة (A4):' : 'Taille sur facture (A4) :'}</span>
+                              {logoSizeSaving && <Loader2 className="w-3 h-3 animate-spin text-teal-600" />}
+                            </span>
+                            <span className="font-mono font-black text-[11px] px-2 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300">
+                              {logoSize} px
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-400 font-bold">40px</span>
+                            <input
+                              type="range"
+                              min="40"
+                              max="180"
+                              step="5"
+                              value={logoSize}
+                              onChange={e => handleLogoSizeChange(Number(e.target.value))}
+                              className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                            />
+                            <span className="text-[10px] text-slate-400 font-bold">180px</span>
+                          </div>
+
+                          <div className="grid grid-cols-4 gap-1 pt-0.5">
+                            {[
+                              { label: lang === 'ar' ? 'صغير' : 'Petit', size: 60 },
+                              { label: lang === 'ar' ? 'متوسط' : 'Moyen', size: 85 },
+                              { label: lang === 'ar' ? 'كبير' : 'Grand', size: 120 },
+                              { label: lang === 'ar' ? 'كبير جداً' : 'XL', size: 160 },
+                            ].map(preset => (
+                              <button
+                                key={preset.size}
+                                type="button"
+                                onClick={() => handleLogoSizeChange(preset.size)}
+                                className={`py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer text-center ${
+                                  logoSize === preset.size
+                                    ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                                    : 'bg-slate-50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-teal-500'
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Stamp / Cachet Upload Card with Activate/Deactivate Toggle */}
@@ -975,166 +1130,90 @@ export const SettingsView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Immediate Action Bar for Branding */}
-                  <div className="mt-4 pt-3 border-t border-slate-200/80 dark:border-slate-700/80 flex flex-wrap items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowSqlModal(true)}
-                      className="px-3.5 py-2 rounded-xl bg-slate-200/80 dark:bg-slate-700/70 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-2 cursor-pointer transition active:scale-95"
-                    >
-                      <Database className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                      <span>{lang === 'ar' ? 'كود SQL لتحديث جداول Supabase' : 'Script SQL Supabase'}</span>
-                    </button>
-
-                    <div className="flex items-center gap-2">
-                      {brandingSaved && !brandingSaving && (
-                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 animate-in fade-in">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>{lang === 'ar' ? 'تم الحفظ والمزامنة!' : 'Enregistré avec succès !'}</span>
+                  {/* Live Invoice Preview Sample */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3.5 h-3.5 rounded-full shadow-xs" style={{ backgroundColor: invoiceColor }} />
+                        <span className="text-xs font-black text-slate-800 dark:text-slate-100">
+                          {lang === 'ar' ? 'معاينة حية لشكل الفاتورة الرسمية (Aperçu direct de la facture)' : 'Aperçu en direct de votre facture'}
                         </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={handleSaveBrandingNow}
-                        disabled={brandingSaving}
-                        className={`px-4 py-2 rounded-xl text-white font-bold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 ${
-                          brandingSaving ? 'bg-teal-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'
-                        }`}
-                      >
-                        {brandingSaving ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>{lang === 'ar' ? 'جاري الحفظ سحابياً...' : 'Sauvegarde...'}</span>
-                          </>
-                        ) : brandingSaved ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>{lang === 'ar' ? 'تم حفظ الهوية' : 'Enregistré'}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Palette className="w-3.5 h-3.5" />
-                            <span>{lang === 'ar' ? 'حفظ الهوية واللوجو سحابياً الآن' : 'Enregistrer le logo & l\'identité'}</span>
-                          </>
-                        )}
-                      </button>
+                      </div>
+                      <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-md text-white shadow-xs" style={{ backgroundColor: invoiceColor }}>
+                        {invoiceColor.toUpperCase()}
+                      </span>
+                    </div>
+
+                    {/* Mini Invoice Card Sample */}
+                    <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-sans text-xs space-y-3">
+                      {/* Header */}
+                      <div style={{ borderColor: invoiceColor }} className="flex justify-between items-center pb-2.5 border-b-2">
+                        <div className="flex items-center gap-2.5">
+                          {logo ? (
+                            <div className="shrink-0 flex items-center justify-center">
+                              <img
+                                src={logo}
+                                alt="Logo"
+                                style={{
+                                  height: `${Math.round(logoSize * 0.55)}px`,
+                                  maxHeight: `${Math.round(logoSize * 0.55)}px`,
+                                  maxWidth: `${Math.round(logoSize * 1.5)}px`,
+                                  objectFit: 'contain'
+                                }}
+                                className="block"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                              {lang === 'ar' ? 'لوجو' : 'Logo'}
+                            </div>
+                          )}
+                          <div>
+                            <h5 style={{ color: invoiceColor }} className="font-black text-sm tracking-tight leading-none">
+                              {name || (lang === 'ar' ? 'اسم المحل' : 'Nom du magasin')}
+                            </h5>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">
+                              {city ? `${city} - ` : ''}{phone || '06XXXXXXXX'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className={lang === 'ar' ? 'text-left' : 'text-right'}>
+                          <span style={{ color: invoiceColor }} className="font-black text-sm block tracking-wider leading-none">
+                            {lang === 'ar' ? 'فاتورة بيع' : 'Facture de Vente'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">N° FAC-2026-0001</span>
+                        </div>
+                      </div>
+
+                      {/* Mini Table */}
+                      <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 text-[11px]">
+                        <div style={{ backgroundColor: invoiceColor }} className="text-white font-extrabold px-3 py-1.5 flex justify-between">
+                          <span>{lang === 'ar' ? 'السلعة / البيان' : 'Désignation'}</span>
+                          <div className="flex gap-4">
+                            <span className="w-12 text-center">{lang === 'ar' ? 'الكمية' : 'Qté'}</span>
+                            <span className="w-20 text-left">{lang === 'ar' ? 'المجموع' : 'Total'}</span>
+                          </div>
+                        </div>
+                        <div className="px-3 py-2 flex justify-between bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300">
+                          <span>{lang === 'ar' ? 'سلعة تجريبية (Exemple)' : 'Article Exemple'}</span>
+                          <div className="flex gap-4">
+                            <span className="w-12 text-center font-bold">1</span>
+                            <span className="w-20 text-left font-mono font-bold">150,00 د.م.</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mini Total */}
+                      <div className="flex justify-between items-center pt-1 border-t border-slate-150 dark:border-slate-800 text-xs font-black">
+                        <span>{lang === 'ar' ? 'المجموع الإجمالي الصافي (TTC):' : 'Total Net (TTC) :'}</span>
+                        <span style={{ color: invoiceColor }} className="font-mono text-sm">
+                          150,00 د.م.
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
 
-            {storeSection === 'general' && (
-              /* Informations Générales du Magasin */
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {lang === 'ar' ? 'اسم المحل أو المتجر *' : 'Nom du magasin / Enseigne *'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {lang === 'ar' ? 'نوع النشاط' : 'Secteur d\'activité'}
-                  </label>
-                  <input
-                    type="text"
-                    value={activity}
-                    onChange={e => setActivity(e.target.value as any)}
-                    placeholder={lang === 'ar' ? 'بقالة ومواد غذائية، ملابس، عقاقير...' : 'Épicerie, prêt-à-porter, quincaillerie...'}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {lang === 'ar' ? 'رقم الهاتف (يظهر في التذكرة)' : 'Téléphone (affiché sur le ticket)'}
-                  </label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-mono text-left text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
-                    dir="ltr"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {lang === 'ar' ? 'المدينة' : 'Ville'}
-                  </label>
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={e => setCity(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {lang === 'ar' ? 'العنوان الكامل للمحل' : 'Adresse complète du magasin'}
-                  </label>
-                  <input
-                    type="text"
-                    value={address}
-                    onChange={e => setAddress(e.target.value)}
-                    placeholder={lang === 'ar' ? 'مثال: زنقة 15، حي الأمل...' : 'Ex: Rue 15, Quartier...'}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
-                  />
-                </div>
-
-                {/* Direct save button for General info */}
-                <div className="sm:col-span-2 pt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 border-t border-slate-150 dark:border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setShowSqlModal(true)}
-                    className="px-3.5 py-2 rounded-xl bg-slate-200/80 dark:bg-slate-700/70 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition active:scale-95"
-                  >
-                    <Database className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                    <span>{lang === 'ar' ? 'كود SQL لتحديث جداول Supabase' : 'Script SQL Supabase'}</span>
-                  </button>
-
-                  <div className="flex items-center gap-2 self-end sm:self-auto">
-                    {generalSaved && !generalSaving && (
-                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 animate-in fade-in">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>{lang === 'ar' ? 'تم الحفظ في السحابة!' : 'Enregistré avec succès !'}</span>
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleSaveGeneralNow}
-                      disabled={generalSaving}
-                      className={`px-4 py-2 rounded-xl text-white font-bold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 ${
-                        generalSaving ? 'bg-teal-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'
-                      }`}
-                    >
-                      {generalSaving ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>{lang === 'ar' ? 'جاري الحفظ سحابياً...' : 'Sauvegarde...'}</span>
-                        </>
-                      ) : generalSaved ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>{lang === 'ar' ? 'تم الحفظ' : 'Enregistré'}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-3.5 h-3.5" />
-                          <span>{lang === 'ar' ? 'حفظ معلومات المحل سحابياً الآن' : 'Enregistrer les coordonnées'}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
                 </div>
               </div>
             )}

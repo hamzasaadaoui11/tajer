@@ -1276,6 +1276,7 @@ class SyncEngine {
           patente: business.patente || null,
           cnss: business.cnss || null,
           logo: business.logo || null,
+          logo_size: business.logoSize || 85,
           stamp: (business.stampEnabled === false || business.stamp === 'DISABLED')
             ? 'DISABLED'
             : (business.stamp || null),
@@ -1290,7 +1291,16 @@ class SyncEngine {
           updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase.from('businesses').upsert(payload, { onConflict: 'id' });
+        let { error } = await supabase.from('businesses').upsert(payload, { onConflict: 'id' });
+        if (error && (error.message?.includes('invoice_color') || error.message?.includes('logo_size'))) {
+          console.warn('New settings columns missing in Supabase schema, retrying without them:', error.message);
+          const fallbackPayload = { ...payload };
+          delete (fallbackPayload as any).invoice_color;
+          delete (fallbackPayload as any).logo_size;
+          const retry = await supabase.from('businesses').upsert(fallbackPayload, { onConflict: 'id' });
+          error = retry.error;
+        }
+
         if (error) {
           console.warn('Direct save business error:', error.message);
           return { success: false, error: error.message };
@@ -1338,14 +1348,17 @@ class SyncEngine {
     const supabase = getSupabase();
     if (supabase && isSupabaseConfigured() && navigator.onLine) {
       try {
-        // Ensure business exists in Supabase to satisfy foreign keys
+        // Ensure business exists in Supabase to satisfy foreign keys without overwriting customized properties
         try {
+          const currentBiz = db.getBusiness(product.business_id) || db.get<Business>('businesses')[0];
+          const savedCol = typeof window !== 'undefined' ? localStorage.getItem('tajer_invoice_color') : null;
           await supabase.from('businesses').upsert({
             id: product.business_id,
-            name: 'المحل التجاري',
-            currency: 'MAD',
-            tax_enabled: true,
-            default_tax_rate: 20,
+            name: currentBiz?.name || 'المحل التجاري',
+            currency: currentBiz?.currency || 'MAD',
+            invoice_color: currentBiz?.invoiceColor || savedCol || '#C02626',
+            tax_enabled: currentBiz?.taxEnabled ?? true,
+            default_tax_rate: currentBiz?.defaultTaxRate ?? 20,
             created_at: new Date().toISOString(),
           }, { onConflict: 'id' });
         } catch {}
