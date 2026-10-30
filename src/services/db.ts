@@ -438,17 +438,11 @@ class LocalDatabase {
     let users = this.get<User>('users');
 
     if (businesses.length === 0) {
-      const defaultStoreName = customUser?.name 
-        ? `متجر ${customUser.name}` 
-        : customUser?.email 
-          ? `متجر ${customUser.email.split('@')[0]}`
-          : 'متجر التيسير للتجارة العامة';
-
-      // Create initial Moroccan store
+      // Create initial blank store so user can fill in their own info
       const initialBusiness: Business = {
         id: 'biz-' + (customUser?.id ? customUser.id.substring(0, 8) : Math.random().toString(36).substring(2, 9)),
-        name: defaultStoreName,
-        activity: 'general_store',
+        name: '',
+        activity: '',
         currency: 'MAD',
         phone: '',
         address: '',
@@ -457,9 +451,9 @@ class LocalDatabase {
         ifNumber: '',
         rc: '',
         patente: '',
-        taxEnabled: true,
+        taxEnabled: false,
         defaultTaxRate: 20,
-        receiptFooter: 'شكراً لزيارتكم! البضاعة المباعة ترد أو تستبدل خلال 48 ساعة مع الفاتورة',
+        receiptFooter: '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -479,7 +473,7 @@ class LocalDatabase {
         id: 'usr-' + (customUser?.id ? customUser.id.substring(0, 8) : Math.random().toString(36).substring(2, 9)),
         business_id: initialBusiness.id,
         branch_id: initialBranch.id,
-        name: customUser?.name ? customUser.name : defaultStoreName,
+        name: customUser?.name ? customUser.name : (customUser?.email ? customUser.email.split('@')[0] : 'مدير النظام'),
         email: customUser?.email ? customUser.email : 'admin@tajer.ma',
         phone: '',
         role: 'ADMIN',

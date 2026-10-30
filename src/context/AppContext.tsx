@@ -268,7 +268,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (!error && remoteBiz && remoteBiz.name) {
           const localBiz = db.getBusiness(remoteBiz.id) || db.get<Business>('businesses')[0];
-          const finalLogo = remoteBiz.logo || localBiz?.logo || '';
+          const finalName = (localBiz?.name && localBiz.name.trim() && !localBiz.name.includes('@'))
+            ? localBiz.name
+            : ((remoteBiz.name && remoteBiz.name.trim() && !remoteBiz.name.includes('@') && !remoteBiz.name.startsWith('متجر')) 
+                ? remoteBiz.name 
+                : (localBiz?.name || ''));
+
+          const finalActivity = localBiz?.activity || (remoteBiz.activity !== 'general_store' ? remoteBiz.activity : '') || '';
+          const finalPhone = localBiz?.phone || remoteBiz.phone || '';
+          const finalAddress = localBiz?.address || remoteBiz.address || '';
+          const finalCity = localBiz?.city || remoteBiz.city || '';
+
+          const finalLogo = localBiz?.logo || remoteBiz.logo || '';
           const finalStamp = (remoteBiz.stamp && remoteBiz.stamp !== 'DISABLED')
             ? remoteBiz.stamp
             : (remoteBiz.stamp === 'DISABLED' ? '' : (localBiz?.stamp === 'DISABLED' ? '' : (localBiz?.stamp || '')));
@@ -284,29 +295,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           const restored: Business = {
             id: remoteBiz.id,
-            name: remoteBiz.name,
-            activity: remoteBiz.activity || 'general_store',
+            name: finalName,
+            activity: finalActivity,
             currency: remoteBiz.currency || 'MAD',
-            phone: remoteBiz.phone || '',
-            address: remoteBiz.address || '',
-            city: remoteBiz.city || '',
-            ice: remoteBiz.ice || '',
-            ifNumber: remoteBiz.if_number || '',
-            rc: remoteBiz.rc || '',
-            patente: remoteBiz.patente || '',
-            cnss: remoteBiz.cnss || '',
+            phone: finalPhone,
+            address: finalAddress,
+            city: finalCity,
+            ice: localBiz?.ice || remoteBiz.ice || '',
+            ifNumber: localBiz?.ifNumber || remoteBiz.if_number || '',
+            rc: localBiz?.rc || remoteBiz.rc || '',
+            patente: localBiz?.patente || remoteBiz.patente || '',
+            cnss: localBiz?.cnss || remoteBiz.cnss || '',
             logo: finalLogo,
             logoSize: finalLogoSize,
             stamp: finalStamp,
             stampEnabled: finalStampEnabled,
             invoiceColor: finalInvoiceColor,
-            receiptFooter: remoteBiz.receipt_footer || '',
-            a4Footer: remoteBiz.a4_footer || '',
-            bankInfo: remoteBiz.bank_info || '',
-            capital: remoteBiz.capital || '',
+            receiptFooter: localBiz?.receiptFooter || remoteBiz.receipt_footer || '',
+            a4Footer: localBiz?.a4Footer || remoteBiz.a4_footer || '',
+            bankInfo: localBiz?.bankInfo || remoteBiz.bank_info || '',
+            capital: localBiz?.capital || remoteBiz.capital || '',
             email: remoteBiz.email || cleanEmail || '',
-            taxEnabled: remoteBiz.tax_enabled ?? false,
-            defaultTaxRate: Number(remoteBiz.default_tax_rate ?? 20),
+            taxEnabled: localBiz?.taxEnabled ?? (remoteBiz.tax_enabled ?? false),
+            defaultTaxRate: Number(localBiz?.defaultTaxRate ?? remoteBiz.default_tax_rate ?? 20),
             created_at: remoteBiz.created_at || new Date().toISOString(),
             updated_at: remoteBiz.updated_at || new Date().toISOString(),
           };
