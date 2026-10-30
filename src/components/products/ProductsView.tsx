@@ -380,10 +380,6 @@ export const ProductsView: React.FC = () => {
       alert(lang === 'ar' ? 'يرجى كتابة اسم المنتج' : 'Veuillez saisir le nom du produit');
       return;
     }
-    if (!imageUrl) {
-      alert(lang === 'ar' ? 'يرجى تحميل صورة المنتج (الصورة مطلوبة)' : 'Veuillez ajouter une photo pour le produit (obligatoire)');
-      return;
-    }
 
     const prodData: Product = {
       id: editingProduct ? editingProduct.id : 'prod-' + Date.now(),
@@ -399,7 +395,7 @@ export const ProductsView: React.FC = () => {
       current_stock: parseFloat(currentStock) || 0,
       min_stock: parseFloat(minStock) || 5,
       tax_rate: business.taxEnabled ? (parseFloat(taxRate) || 0) : 0,
-      image_url: imageUrl,
+      image_url: imageUrl || '',
       is_active: true,
       created_at: editingProduct ? editingProduct.created_at : new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -410,6 +406,8 @@ export const ProductsView: React.FC = () => {
     // Save locally and refresh UI instantly (0ms delay)
     if (imageUrl) {
       imageService.setImage(prodData.id, imageUrl);
+    } else if (editingProduct) {
+      imageService.setImage(prodData.id, '');
     }
     db.saveProduct(prodData, user.name);
     refreshData();
@@ -1044,10 +1042,23 @@ export const ProductsView: React.FC = () => {
                       </button>
                     </div>
                     
-                    <div className="flex-1 space-y-1 text-right">
-                      <div className="text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] flex items-center gap-1.5 justify-start">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block shrink-0"></span>
-                        <span>{lang === 'ar' ? '✓ تم ضغط وتحسين الصورة بنجاح!' : '✓ Image optimisée avec succès !'}</span>
+                    <div className="flex-1 space-y-1.5 text-right">
+                      <div className="flex items-center justify-between">
+                        <div className="text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] flex items-center gap-1.5 justify-start">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block shrink-0"></span>
+                          <span>{lang === 'ar' ? '✓ تم ضغط وتحسين الصورة بنجاح!' : '✓ Image optimisée avec succès !'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageUrl('');
+                            setOriginalSize('');
+                            setCompressedSize('');
+                          }}
+                          className="text-[10px] text-rose-500 hover:text-rose-700 font-bold hover:underline cursor-pointer"
+                        >
+                          {lang === 'ar' ? 'إلغاء الصورة' : 'Supprimer la photo'}
+                        </button>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-2 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-[10px] text-right">
@@ -1072,10 +1083,10 @@ export const ProductsView: React.FC = () => {
                   <label className="flex flex-col items-center justify-center gap-1.5 cursor-pointer w-full py-2 text-slate-500">
                     <Camera className="w-8 h-8 text-slate-400" />
                     <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                      {lang === 'ar' ? 'تحميل صورة للمنتج (مطلوبة) *' : 'Photo du produit (obligatoire) *'}
+                      {lang === 'ar' ? 'تحميل صورة للمنتج (اختيارية)' : 'Photo du produit (optionnelle)'}
                     </span>
                     <span className="text-[9px] text-slate-400">
-                      {lang === 'ar' ? 'اضغط لاختيار صورة أو التقاطها بالكاميرا' : 'Cliquez pour choisir ou prendre une photo'}
+                      {lang === 'ar' ? 'اضغط لاختيار صورة أو التقاطها بالكاميرا (يمكنك حفظ السلعة بدون صورة)' : 'Cliquez pour choisir une photo ou enregistrez sans image'}
                     </span>
                     <input
                       type="file"
