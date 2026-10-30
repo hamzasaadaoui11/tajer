@@ -778,7 +778,6 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                   )}
                   <p className="font-semibold text-slate-700 uppercase">
                     {[
-                      business.name ? business.name : null,
                       business.capital?.trim() ? `${lang === 'ar' ? 'رأس المال :' : 'Capital :'} ${business.capital.trim()}` : null,
                       business.phone?.trim() ? `${lang === 'ar' ? 'الهاتف :' : 'Tél :'} ${business.phone.trim()}` : null,
                       [business.address?.trim(), business.city?.trim()].filter(Boolean).join(' - ') || null,

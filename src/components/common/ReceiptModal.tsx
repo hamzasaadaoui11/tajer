@@ -906,7 +906,6 @@ export const ReceiptModal: React.FC = () => {
                   )}
                   <p className="font-semibold text-slate-700">
                     {[
-                      business.name ? business.name : null,
                       business.capital?.trim() ? `${lang === 'ar' ? 'رأس المال :' : 'Capital :'} ${business.capital.trim()}` : null,
                       business.phone?.trim() ? `${lang === 'ar' ? 'الهاتف :' : 'Tél :'} ${business.phone.trim()}` : null,
                       [business.address?.trim(), business.city?.trim()].filter(Boolean).join(' - ') || null,
