@@ -27,9 +27,9 @@ export const OnboardingView: React.FC = () => {
       ? business.activity 
       : ''
   );
-  const [phone, setPhone] = useState(business.phone || '06 61 23 45 67');
-  const [city, setCity] = useState(business.city || 'الدار البيضاء');
-  const [address, setAddress] = useState(business.address || 'حي المعاريف');
+  const [phone, setPhone] = useState(business.phone || '');
+  const [city, setCity] = useState(business.city || '');
+  const [address, setAddress] = useState(business.address || '');
   const [ice, setIce] = useState(business.ice || '');
   const [ifNumber, setIfNumber] = useState(business.ifNumber || '');
   const [rc, setRc] = useState(business.rc || '');
@@ -59,9 +59,9 @@ export const OnboardingView: React.FC = () => {
         ...business,
         name: storeName.trim() || 'متجر البركة',
         activity,
-        phone: phone.trim() || '06 61 00 11 22',
-        city: city.trim() || 'الدار البيضاء',
-        address: address.trim() || 'حي المسيرة',
+        phone: phone.trim(),
+        city: city.trim(),
+        address: address.trim(),
         ice: ice.trim(),
         ifNumber: ifNumber.trim(),
         rc: rc.trim(),

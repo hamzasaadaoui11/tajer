@@ -27,7 +27,11 @@ import {
   Smartphone,
   ExternalLink,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Code,
+  Copy,
+  Database,
+  Save
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { db } from '../../services/db';
@@ -153,6 +157,70 @@ export const SettingsView: React.FC = () => {
   const [taxEnabled, setTaxEnabled] = useState(business.taxEnabled ?? false);
   const [defaultTaxRate, setDefaultTaxRate] = useState(business.defaultTaxRate ?? 20);
 
+  const [logoSaving, setLogoSaving] = useState(false);
+  const [logoSaved, setLogoSaved] = useState(false);
+  const [stampSaving, setStampSaving] = useState(false);
+  const [stampSaved, setStampSaved] = useState(false);
+  const [colorSaving, setColorSaving] = useState(false);
+  const [colorSaved, setColorSaved] = useState(false);
+  const [brandingSaving, setBrandingSaving] = useState(false);
+  const [brandingSaved, setBrandingSaved] = useState(false);
+  const [generalSaving, setGeneralSaving] = useState(false);
+  const [generalSaved, setGeneralSaved] = useState(false);
+  const [showSqlModal, setShowSqlModal] = useState(false);
+  const [sqlCopied, setSqlCopied] = useState(false);
+  const [storeSaveLoading, setStoreSaveLoading] = useState(false);
+  const [storeSaveSuccess, setStoreSaveSuccess] = useState(false);
+
+  // Sync state if business object updates from DB or Supabase
+  React.useEffect(() => {
+    if (business.name !== undefined) setName(business.name || '');
+    if (business.activity !== undefined) {
+      setActivity(
+        business.activity && business.activity !== 'grocery' && business.activity !== 'general_store'
+          ? business.activity
+          : ''
+      );
+    }
+    if (business.phone !== undefined) setPhone(business.phone || '');
+    if (business.city !== undefined) setCity(business.city || '');
+    if (business.address !== undefined) setAddress(business.address || '');
+    if (business.ice !== undefined) setIce(business.ice || '');
+    if (business.rc !== undefined) setRc(business.rc || '');
+    if (business.ifNumber !== undefined) setIfNumber(business.ifNumber || '');
+    if (business.patente !== undefined) setPatente(business.patente || '');
+    if (business.capital !== undefined) setCapital(business.capital || '');
+    if (business.bankInfo !== undefined) setBankInfo(business.bankInfo || '');
+    if (business.receiptFooter !== undefined) setReceiptFooter(business.receiptFooter || '');
+    if (business.a4Footer !== undefined) setA4Footer(business.a4Footer || '');
+    if (business.logo !== undefined) setLogo(business.logo || '');
+    if (business.stamp !== undefined) setStamp(business.stamp === 'DISABLED' ? '' : (business.stamp || ''));
+    if (business.stampEnabled !== undefined) setStampEnabled(business.stampEnabled);
+    if (business.invoiceColor !== undefined) setInvoiceColor(business.invoiceColor || '#C02626');
+    if (business.taxEnabled !== undefined) setTaxEnabled(business.taxEnabled ?? false);
+    if (business.defaultTaxRate !== undefined) setDefaultTaxRate(business.defaultTaxRate ?? 20);
+  }, [
+    business.name,
+    business.activity,
+    business.phone,
+    business.city,
+    business.address,
+    business.ice,
+    business.rc,
+    business.ifNumber,
+    business.patente,
+    business.capital,
+    business.bankInfo,
+    business.receiptFooter,
+    business.a4Footer,
+    business.logo,
+    business.stamp,
+    business.stampEnabled,
+    business.invoiceColor,
+    business.taxEnabled,
+    business.defaultTaxRate,
+  ]);
+
   // Helper to compress images automatically
   const compressImage = (file: File, maxDim = 320, quality = 0.60): Promise<string> => {
     return new Promise((resolve) => {
@@ -194,31 +262,117 @@ export const SettingsView: React.FC = () => {
     });
   };
 
-  // Logo Upload with automatic compression
+  // Logo Upload with automatic compression and instant cloud persistence
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setLogoSaving(true);
+    setLogoSaved(false);
     try {
       const compressed = await compressImage(file, 400, 0.75);
       setLogo(compressed);
+      await updateBusiness({ logo: compressed });
+      setLogoSaved(true);
+      setTimeout(() => setLogoSaved(false), 4000);
     } catch {
       const reader = new FileReader();
-      reader.onload = (event) => setLogo(event.target?.result as string);
+      reader.onload = async (event) => {
+        const res = event.target?.result as string;
+        setLogo(res);
+        await updateBusiness({ logo: res });
+        setLogoSaved(true);
+        setTimeout(() => setLogoSaved(false), 4000);
+      };
       reader.readAsDataURL(file);
+    } finally {
+      setLogoSaving(false);
     }
   };
 
-  // Stamp Upload with automatic compression
+  const handleRemoveLogo = async () => {
+    setLogo('');
+    setLogoSaved(false);
+    await updateBusiness({ logo: '' });
+  };
+
+  // Stamp Upload with automatic compression and instant cloud persistence
   const handleStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setStampSaving(true);
+    setStampSaved(false);
     try {
       const compressed = await compressImage(file, 400, 0.75);
       setStamp(compressed);
+      await updateBusiness({ stamp: compressed, stampEnabled: true });
+      setStampSaved(true);
+      setTimeout(() => setStampSaved(false), 4000);
     } catch {
       const reader = new FileReader();
-      reader.onload = (event) => setStamp(event.target?.result as string);
+      reader.onload = async (event) => {
+        const res = event.target?.result as string;
+        setStamp(res);
+        await updateBusiness({ stamp: res, stampEnabled: true });
+        setStampSaved(true);
+        setTimeout(() => setStampSaved(false), 4000);
+      };
       reader.readAsDataURL(file);
+    } finally {
+      setStampSaving(false);
+    }
+  };
+
+  const handleRemoveStamp = async () => {
+    setStamp('');
+    setStampSaved(false);
+    await updateBusiness({ stamp: '', stampEnabled: false });
+  };
+
+  // Instant save invoice theme color
+  const handleColorSelect = async (newColor: string) => {
+    setInvoiceColor(newColor);
+    setColorSaving(true);
+    setColorSaved(false);
+    try {
+      await updateBusiness({ invoiceColor: newColor });
+      setColorSaved(true);
+      setTimeout(() => setColorSaved(false), 3000);
+    } finally {
+      setColorSaving(false);
+    }
+  };
+
+  // Instant toggle stamp
+  const handleStampToggle = async (enabled: boolean) => {
+    setStampEnabled(enabled);
+    setStampSaving(true);
+    try {
+      await updateBusiness({
+        stampEnabled: enabled,
+        stamp: enabled ? (stamp || '') : 'DISABLED'
+      });
+      setStampSaved(true);
+      setTimeout(() => setStampSaved(false), 3000);
+    } finally {
+      setStampSaving(false);
+    }
+  };
+
+  // Direct branding save button
+  const handleSaveBrandingNow = async () => {
+    setBrandingSaving(true);
+    setBrandingSaved(false);
+    try {
+      await updateBusiness({
+        logo,
+        stamp: stampEnabled ? stamp : 'DISABLED',
+        stampEnabled,
+        invoiceColor,
+      });
+      setBrandingSaved(true);
+      setTimeout(() => setBrandingSaved(false), 4000);
+    } finally {
+      setBrandingSaving(false);
     }
   };
 
@@ -316,31 +470,71 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  // Quick save for General Store Information
+  const handleSaveGeneralNow = async () => {
+    setGeneralSaving(true);
+    setGeneralSaved(false);
+    try {
+      const res = await updateBusiness({
+        name: name.trim() || business.name,
+        activity: activity.trim(),
+        phone: phone.trim(),
+        city: city.trim(),
+        address: address.trim(),
+      });
+      setGeneralSaving(false);
+      if (res && res.success === false) {
+        alert(lang === 'ar' ? 'فشل الحفظ في السحابة: ' + res.error : 'Erreur: ' + res.error);
+      } else {
+        setGeneralSaved(true);
+        setTimeout(() => setGeneralSaved(false), 3000);
+      }
+    } catch (err: any) {
+      setGeneralSaving(false);
+      alert(lang === 'ar' ? 'حدث خطأ: ' + (err?.message || '') : 'Erreur: ' + (err?.message || ''));
+    }
+  };
+
   // Save Store Settings
-  const handleSaveStore = (e: React.FormEvent) => {
+  const handleSaveStore = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateBusiness({
-      name,
-      activity,
-      phone,
-      city,
-      address,
-      ice: ice.trim(),
-      rc: rc.trim(),
-      ifNumber: ifNumber.trim(),
-      patente: patente.trim(),
-      capital: capital.trim(),
-      bankInfo: bankInfo.trim(),
-      receiptFooter,
-      a4Footer,
-      logo,
-      stamp: stampEnabled ? stamp : 'DISABLED',
-      stampEnabled,
-      invoiceColor,
-      taxEnabled,
-      defaultTaxRate,
-    });
-    alert(lang === 'ar' ? 'تم حفظ إعدادات المتجر بنجاح!' : 'Paramètres du magasin enregistrés avec succès !');
+    setStoreSaveLoading(true);
+    setStoreSaveSuccess(false);
+
+    try {
+      const res = await updateBusiness({
+        name: name.trim() || business.name,
+        activity: activity.trim(),
+        phone: phone.trim(),
+        city: city.trim(),
+        address: address.trim(),
+        ice: ice.trim(),
+        rc: rc.trim(),
+        ifNumber: ifNumber.trim(),
+        patente: patente.trim(),
+        capital: capital.trim(),
+        bankInfo: bankInfo.trim(),
+        receiptFooter,
+        a4Footer,
+        logo,
+        stamp: stampEnabled ? stamp : 'DISABLED',
+        stampEnabled,
+        invoiceColor,
+        taxEnabled,
+        defaultTaxRate,
+      });
+      if (res && res.success === false) {
+        alert(lang === 'ar' ? 'تنبيه: تم الحفظ محلياً لكن تعذر التحديث في السحاب: ' + res.error : 'Erreur cloud: ' + res.error);
+      } else {
+        setStoreSaveSuccess(true);
+        setTimeout(() => setStoreSaveSuccess(false), 4000);
+        alert(lang === 'ar' ? '✓ تم حفظ إعدادات وبيانات المتجر ومزامنتها سحابياً بنجاح!' : '✓ Paramètres enregistrés avec succès !');
+      }
+    } catch (err: any) {
+      alert(lang === 'ar' ? 'حدث خطأ أثناء الحفظ: ' + (err?.message || '') : 'Erreur: ' + (err?.message || ''));
+    } finally {
+      setStoreSaveLoading(false);
+    }
   };
 
   return (
@@ -534,8 +728,9 @@ export const SettingsView: React.FC = () => {
                           />
                           <button
                             type="button"
-                            onClick={() => setLogo('')}
-                            className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 text-white shadow-xs hover:bg-rose-700 transition cursor-pointer"
+                            onClick={handleRemoveLogo}
+                            disabled={logoSaving}
+                            className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 text-white shadow-xs hover:bg-rose-700 transition cursor-pointer disabled:opacity-50"
                             title={lang === 'ar' ? 'حذف الشعار' : 'Supprimer le logo'}
                           >
                             <Trash2 className="w-3 h-3" />
@@ -552,15 +747,30 @@ export const SettingsView: React.FC = () => {
                           {lang === 'ar' ? 'شعار الشركة / المحل' : 'Logo du magasin'}
                         </span>
                         <span className="block text-[10px] text-slate-400 mt-0.5">
-                          {lang === 'ar' ? 'صيغة PNG أو JPG أو SVG' : 'Format PNG, JPG ou SVG'}
+                          {lang === 'ar' ? 'صيغة PNG أو JPG أو SVG (يُحفظ تلقائياً)' : 'Format PNG, JPG ou SVG (auto-sauvegardé)'}
                         </span>
+
+                        {logoSaving && (
+                          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-amber-600 dark:text-amber-400 font-semibold animate-pulse">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>{lang === 'ar' ? 'جاري الحفظ في قاعدة البيانات...' : 'Sauvegarde dans la base de données...'}</span>
+                          </div>
+                        )}
+
+                        {logoSaved && !logoSaving && (
+                          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-bold animate-in fade-in">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>{lang === 'ar' ? '✓ تم حفظ الشعار سحابياً بنجاح!' : '✓ Logo enregistré avec succès !'}</span>
+                          </div>
+                        )}
                         
-                        <label className="inline-block mt-2 px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-[11px] font-bold cursor-pointer transition">
+                        <label className={`inline-block mt-2 px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-[11px] font-bold cursor-pointer transition ${logoSaving ? 'opacity-50 pointer-events-none' : ''}`}>
                           <Upload className="w-3 h-3 inline-block me-1" />
-                          <span>{lang === 'ar' ? 'تحميل الشعار' : 'Téléverser le logo'}</span>
+                          <span>{logo ? (lang === 'ar' ? 'تغيير الشعار' : 'Changer le logo') : (lang === 'ar' ? 'تحميل الشعار' : 'Téléverser le logo')}</span>
                           <input
                             type="file"
                             accept="image/*"
+                            disabled={logoSaving}
                             onChange={handleLogoUpload}
                             className="hidden"
                           />
@@ -588,7 +798,7 @@ export const SettingsView: React.FC = () => {
                           <input
                             type="checkbox"
                             checked={stampEnabled}
-                            onChange={(e) => setStampEnabled(e.target.checked)}
+                            onChange={(e) => handleStampToggle(e.target.checked)}
                             className="sr-only peer"
                           />
                           <div className="w-11 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
@@ -607,8 +817,9 @@ export const SettingsView: React.FC = () => {
                               />
                               <button
                                 type="button"
-                                onClick={() => setStamp('')}
-                                className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 text-white shadow-xs hover:bg-rose-700 transition cursor-pointer"
+                                onClick={handleRemoveStamp}
+                                disabled={stampSaving}
+                                className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 text-white shadow-xs hover:bg-rose-700 transition cursor-pointer disabled:opacity-50"
                                 title={lang === 'ar' ? 'حذف الختم' : 'Supprimer le cachet'}
                               >
                                 <Trash2 className="w-3 h-3" />
@@ -623,17 +834,32 @@ export const SettingsView: React.FC = () => {
                           <div className="flex-1 min-w-0">
                             <span className="block text-[11px] font-medium text-slate-600 dark:text-slate-300">
                               {stamp 
-                                ? (lang === 'ar' ? 'ختم مخصص مرفوع' : 'Cachet personnalisé importé')
+                                ? (lang === 'ar' ? 'ختم مخصص مرفوع (محفوظ سحابياً)' : 'Cachet personnalisé importé')
                                 : (lang === 'ar' ? 'الختم الأزرق الرسمي الافتراضي للمحل' : 'Cachet officiel bleu par défaut')}
                             </span>
+
+                            {stampSaving && (
+                              <div className="flex items-center gap-1.5 mt-1 text-xs text-amber-600 dark:text-amber-400 font-semibold animate-pulse">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>{lang === 'ar' ? 'جاري الحفظ سحابياً...' : 'Sauvegarde en cours...'}</span>
+                              </div>
+                            )}
+
+                            {stampSaved && !stampSaving && (
+                              <div className="flex items-center gap-1.5 mt-1 text-xs text-emerald-600 dark:text-emerald-400 font-bold animate-in fade-in">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>{lang === 'ar' ? '✓ تم حفظ الختم بنجاح!' : '✓ Cachet enregistré !'}</span>
+                              </div>
+                            )}
                             
                             <div className="flex items-center gap-2 mt-1.5">
-                              <label className="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-[11px] font-bold cursor-pointer transition">
+                              <label className={`inline-flex items-center px-2.5 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-[11px] font-bold cursor-pointer transition ${stampSaving ? 'opacity-50 pointer-events-none' : ''}`}>
                                 <Upload className="w-3 h-3 inline-block me-1" />
                                 <span>{stamp ? (lang === 'ar' ? 'تغيير صورة الختم' : 'Changer') : (lang === 'ar' ? 'تحميل ختم مخصص' : 'Téléverser')}</span>
                                 <input
                                   type="file"
                                   accept="image/*"
+                                  disabled={stampSaving}
                                   onChange={handleStampUpload}
                                   className="hidden"
                                 />
@@ -642,8 +868,9 @@ export const SettingsView: React.FC = () => {
                               {stamp && (
                                 <button
                                   type="button"
-                                  onClick={() => setStamp('')}
-                                  className="text-[11px] text-slate-400 hover:text-rose-600 underline cursor-pointer"
+                                  onClick={handleRemoveStamp}
+                                  disabled={stampSaving}
+                                  className="text-[11px] text-slate-400 hover:text-rose-600 underline cursor-pointer disabled:opacity-50"
                                 >
                                   {lang === 'ar' ? 'الرجوع للافتراضي' : 'Par défaut'}
                                 </button>
@@ -666,13 +893,27 @@ export const SettingsView: React.FC = () => {
                     {/* Theme Color Picker Card */}
                     <div className={`p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-150 dark:border-slate-700/60 flex flex-col justify-between ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                       <div>
-                        <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                          {lang === 'ar' ? 'لون الفاتورة الرسمي' : 'Couleur officielle des factures'}
-                        </span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                            {lang === 'ar' ? 'لون الفاتورة الرسمي' : 'Couleur officielle des factures'}
+                          </span>
+                          {colorSaving && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>{lang === 'ar' ? 'جاري الحفظ...' : 'Sauvegarde...'}</span>
+                            </span>
+                          )}
+                          {colorSaved && !colorSaving && (
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>{lang === 'ar' ? '✓ تم الحفظ' : '✓ Enregistré'}</span>
+                            </span>
+                          )}
+                        </div>
                         <span className="block text-[10px] text-slate-400 mt-0.5">
                           {lang === 'ar' 
-                            ? 'سيتم تطبيق هذا اللون على فواتير المبيعات ووصولات التوريد A4' 
-                            : 'Appliqué sur les factures et bons au format A4'}
+                            ? 'سيتم تطبيق هذا اللون على فواتير المبيعات ووصولات التوريد A4 (يُحفظ تلقائياً)' 
+                            : 'Appliqué sur les factures et bons au format A4 (auto-sauvegardé)'}
                         </span>
                       </div>
 
@@ -690,7 +931,7 @@ export const SettingsView: React.FC = () => {
                             <button
                               key={col.hex}
                               type="button"
-                              onClick={() => setInvoiceColor(col.hex)}
+                              onClick={() => handleColorSelect(col.hex)}
                               style={{ backgroundColor: col.hex }}
                               className={`w-6 h-6 rounded-full border transition-all cursor-pointer relative flex items-center justify-center ${
                                 invoiceColor.toLowerCase() === col.hex.toLowerCase()
@@ -711,7 +952,7 @@ export const SettingsView: React.FC = () => {
                           <input
                             type="color"
                             value={invoiceColor}
-                            onChange={e => setInvoiceColor(e.target.value)}
+                            onChange={e => handleColorSelect(e.target.value)}
                             className="w-7 h-7 rounded-lg cursor-pointer border-0 p-0 overflow-hidden bg-transparent shrink-0"
                             title={lang === 'ar' ? 'لون مخصص' : 'Couleur personnalisée'}
                           />
@@ -721,6 +962,9 @@ export const SettingsView: React.FC = () => {
                             onChange={e => {
                               if (e.target.value.startsWith('#') && e.target.value.length <= 7) {
                                 setInvoiceColor(e.target.value);
+                                if (e.target.value.length === 7) {
+                                  handleColorSelect(e.target.value);
+                                }
                               }
                             }}
                             className="w-16 px-1.5 py-1 rounded border border-slate-200 text-[10px] font-mono text-center text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-700"
@@ -728,6 +972,52 @@ export const SettingsView: React.FC = () => {
                           />
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Immediate Action Bar for Branding */}
+                  <div className="mt-4 pt-3 border-t border-slate-200/80 dark:border-slate-700/80 flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowSqlModal(true)}
+                      className="px-3.5 py-2 rounded-xl bg-slate-200/80 dark:bg-slate-700/70 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-2 cursor-pointer transition active:scale-95"
+                    >
+                      <Database className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                      <span>{lang === 'ar' ? 'كود SQL لتحديث جداول Supabase' : 'Script SQL Supabase'}</span>
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      {brandingSaved && !brandingSaving && (
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 animate-in fade-in">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>{lang === 'ar' ? 'تم الحفظ والمزامنة!' : 'Enregistré avec succès !'}</span>
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSaveBrandingNow}
+                        disabled={brandingSaving}
+                        className={`px-4 py-2 rounded-xl text-white font-bold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 ${
+                          brandingSaving ? 'bg-teal-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'
+                        }`}
+                      >
+                        {brandingSaving ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>{lang === 'ar' ? 'جاري الحفظ سحابياً...' : 'Sauvegarde...'}</span>
+                          </>
+                        ) : brandingSaved ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{lang === 'ar' ? 'تم حفظ الهوية' : 'Enregistré'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Palette className="w-3.5 h-3.5" />
+                            <span>{lang === 'ar' ? 'حفظ الهوية واللوجو سحابياً الآن' : 'Enregistrer le logo & l\'identité'}</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -796,8 +1086,55 @@ export const SettingsView: React.FC = () => {
                     type="text"
                     value={address}
                     onChange={e => setAddress(e.target.value)}
+                    placeholder={lang === 'ar' ? 'مثال: زنقة 15، حي الأمل...' : 'Ex: Rue 15, Quartier...'}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800"
                   />
+                </div>
+
+                {/* Direct save button for General info */}
+                <div className="sm:col-span-2 pt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 border-t border-slate-150 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowSqlModal(true)}
+                    className="px-3.5 py-2 rounded-xl bg-slate-200/80 dark:bg-slate-700/70 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition active:scale-95"
+                  >
+                    <Database className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <span>{lang === 'ar' ? 'كود SQL لتحديث جداول Supabase' : 'Script SQL Supabase'}</span>
+                  </button>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    {generalSaved && !generalSaving && (
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 animate-in fade-in">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>{lang === 'ar' ? 'تم الحفظ في السحابة!' : 'Enregistré avec succès !'}</span>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveGeneralNow}
+                      disabled={generalSaving}
+                      className={`px-4 py-2 rounded-xl text-white font-bold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer active:scale-95 ${
+                        generalSaving ? 'bg-teal-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'
+                      }`}
+                    >
+                      {generalSaving ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>{lang === 'ar' ? 'جاري الحفظ سحابياً...' : 'Sauvegarde...'}</span>
+                        </>
+                      ) : generalSaved ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>{lang === 'ar' ? 'تم الحفظ' : 'Enregistré'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5" />
+                          <span>{lang === 'ar' ? 'حفظ معلومات المحل سحابياً الآن' : 'Enregistrer les coordonnées'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -987,12 +1324,33 @@ export const SettingsView: React.FC = () => {
           </div>
 
           {/* Save Button */}
-          <div className={`pt-4 border-t border-slate-100 dark:border-slate-800 flex ${lang === 'ar' ? 'justify-end' : 'justify-start'}`}>
+          <div className={`pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 ${lang === 'ar' ? 'justify-end' : 'justify-start'}`}>
+            {storeSaveSuccess && (
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{lang === 'ar' ? 'تم الحفظ والمزامنة بنجاح!' : 'Enregistré avec succès !'}</span>
+              </span>
+            )}
             <button
               type="submit"
-              className="px-6 py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-600/20 cursor-pointer active:scale-95 transition"
+              disabled={storeSaveLoading}
+              className={`px-6 py-3 rounded-2xl text-white font-bold text-xs shadow-md shadow-teal-600/20 cursor-pointer active:scale-95 transition flex items-center gap-2 ${
+                storeSaveLoading ? 'bg-teal-400 cursor-not-allowed opacity-80' : 'bg-teal-600 hover:bg-teal-700'
+              }`}
             >
-              {lang === 'ar' ? 'حفظ كل التعديلات' : 'Enregistrer les modifications'}
+              {storeSaveLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>{lang === 'ar' ? 'جاري حفظ ومزامنة البيانات...' : 'Enregistrement en cours...'}</span>
+                </>
+              ) : storeSaveSuccess ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>{lang === 'ar' ? 'تم الحفظ' : 'Enregistré'}</span>
+                </>
+              ) : (
+                <span>{lang === 'ar' ? 'حفظ كل التعديلات' : 'Enregistrer les modifications'}</span>
+              )}
             </button>
           </div>
         </form>
@@ -1487,6 +1845,272 @@ export const SettingsView: React.FC = () => {
         onClose={() => setIsGuideOpen(false)}
         lang={lang}
       />
+
+      {/* Supabase SQL Helper Modal for Branding & Schema */}
+      {showSqlModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4 max-h-[90vh] flex flex-col text-right">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <button
+                type="button"
+                onClick={() => setShowSqlModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition"
+              >
+                ✕
+              </button>
+              <div className="flex items-center gap-2">
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    {lang === 'ar' ? 'كود SQL الشامل لإعدادات وبيانات المحل في Supabase' : 'Code SQL complet pour Supabase (Magasin, Identité & Branches)'}
+                  </h3>
+                  <span className="text-[11px] text-slate-500">
+                    {lang === 'ar' ? 'انسخ الكود وشغله في SQL Editor لضمان وجود جميع الأعمدة والجداول وصلاحيات الحفظ' : 'Copiez et exécutez ce script dans Supabase SQL Editor'}
+                  </span>
+                </div>
+                <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                  <Database className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-teal-50/60 dark:bg-teal-950/30 rounded-2xl p-3 border border-teal-200/50 dark:border-teal-900/50 text-xs text-teal-900 dark:text-teal-200 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-teal-600" />
+                <span>{lang === 'ar' ? 'طريقة التشغيل السهلة في 3 خطوات:' : 'Instructions en 3 étapes :'}</span>
+              </p>
+              <ol className="list-decimal list-inside text-[11px] text-slate-700 dark:text-slate-300 space-y-0.5 pr-1">
+                <li>{lang === 'ar' ? 'ادخل لحسابك في موقع Supabase وافتح مشروعك.' : 'Ouvrez votre projet sur Supabase.'}</li>
+                <li>{lang === 'ar' ? 'اضغط من القائمة الجانبية على "SQL Editor" ثم اضغط "New Query".' : 'Cliquez sur SQL Editor puis New Query.'}</li>
+                <li>{lang === 'ar' ? 'الصق الكود التالي واضغط على الزر الأخضر "Run".' : 'Collez le code ci-dessous et cliquez sur Run.'}</li>
+              </ol>
+            </div>
+
+            {/* SQL Code Block */}
+            <div className="relative flex-1 min-h-[160px] max-h-[300px] overflow-auto rounded-2xl bg-slate-950 text-slate-200 p-4 font-mono text-[11px] leading-relaxed border border-slate-800 text-left dir-ltr">
+              <pre className="whitespace-pre">{`-- 1. جدول بيانات المحل والهوية واللوجو والضرائب
+CREATE TABLE IF NOT EXISTS public.businesses (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    activity TEXT DEFAULT 'general_store',
+    currency TEXT DEFAULT 'MAD',
+    phone TEXT,
+    address TEXT,
+    city TEXT,
+    ice TEXT,
+    if_number TEXT,
+    rc TEXT,
+    patente TEXT,
+    cnss TEXT,
+    logo TEXT,
+    stamp TEXT,
+    invoice_color TEXT DEFAULT '#C02626',
+    receipt_footer TEXT,
+    a4_footer TEXT,
+    bank_info TEXT,
+    capital TEXT,
+    email TEXT,
+    tax_enabled BOOLEAN DEFAULT false,
+    default_tax_rate NUMERIC(5,2) DEFAULT 20.00,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. إضافة وتحديث جميع أعمدة businesses
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS activity TEXT DEFAULT 'general_store';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'MAD';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS ice TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS if_number TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS rc TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS patente TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS cnss TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS logo TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS stamp TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS invoice_color TEXT DEFAULT '#C02626';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS receipt_footer TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS a4_footer TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS bank_info TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS capital TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS tax_enabled BOOLEAN DEFAULT false;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS default_tax_rate NUMERIC(5,2) DEFAULT 20.00;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- 3. جدول الفروع (branches)
+CREATE TABLE IF NOT EXISTS public.branches (
+    id TEXT PRIMARY KEY,
+    business_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    city TEXT,
+    address TEXT,
+    phone TEXT,
+    is_main BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS business_id TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS is_main BOOLEAN DEFAULT true;
+
+-- 4. تفعيل صلاحيات القراءة والحفظ والتعديل
+ALTER TABLE public.businesses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access to businesses" ON public.businesses;
+CREATE POLICY "Allow all access to businesses" 
+ON public.businesses FOR ALL TO anon, authenticated 
+USING (true) WITH CHECK (true);
+
+ALTER TABLE public.branches ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access to branches" ON public.branches;
+CREATE POLICY "Allow all access to branches" 
+ON public.branches FOR ALL TO anon, authenticated 
+USING (true) WITH CHECK (true);`}</pre>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSqlModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                {lang === 'ar' ? 'إغلاق' : 'Fermer'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const sqlText = `-- ====================================================================
+-- تاجر (TAJER) - كود SQL الشامل لجميع إعدادات وبيانات المحل في Supabase
+-- ====================================================================
+
+-- 1. جدول بيانات المحل والهوية واللوجو والضرائب
+CREATE TABLE IF NOT EXISTS public.businesses (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    activity TEXT DEFAULT 'general_store',
+    currency TEXT DEFAULT 'MAD',
+    phone TEXT,
+    address TEXT,
+    city TEXT,
+    ice TEXT,
+    if_number TEXT,
+    rc TEXT,
+    patente TEXT,
+    cnss TEXT,
+    logo TEXT,
+    stamp TEXT,
+    invoice_color TEXT DEFAULT '#C02626',
+    receipt_footer TEXT,
+    a4_footer TEXT,
+    bank_info TEXT,
+    capital TEXT,
+    email TEXT,
+    tax_enabled BOOLEAN DEFAULT false,
+    default_tax_rate NUMERIC(5,2) DEFAULT 20.00,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. إضافة وتحديث جميع أعمدة businesses
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS activity TEXT DEFAULT 'general_store';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'MAD';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS ice TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS if_number TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS rc TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS patente TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS cnss TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS logo TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS stamp TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS invoice_color TEXT DEFAULT '#C02626';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS receipt_footer TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS a4_footer TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS bank_info TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS capital TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS tax_enabled BOOLEAN DEFAULT false;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS default_tax_rate NUMERIC(5,2) DEFAULT 20.00;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- 3. جدول الفروع (branches)
+CREATE TABLE IF NOT EXISTS public.branches (
+    id TEXT PRIMARY KEY,
+    business_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    city TEXT,
+    address TEXT,
+    phone TEXT,
+    is_main BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS business_id TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS is_main BOOLEAN DEFAULT true;
+
+-- 4. تفعيل صلاحيات القراءة والحفظ والتعديل
+ALTER TABLE public.businesses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access to businesses" ON public.businesses;
+CREATE POLICY "Allow all access to businesses" 
+ON public.businesses FOR ALL TO anon, authenticated 
+USING (true) WITH CHECK (true);
+
+ALTER TABLE public.branches ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access to branches" ON public.branches;
+CREATE POLICY "Allow all access to branches" 
+ON public.branches FOR ALL TO anon, authenticated 
+USING (true) WITH CHECK (true);
+
+-- 5. تفعيل المزامنة المباشرة
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.businesses;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.branches;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;`;
+                  navigator.clipboard.writeText(sqlText);
+                  setSqlCopied(true);
+                  setTimeout(() => setSqlCopied(false), 3000);
+                }}
+                className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md transition active:scale-95 ${
+                  sqlCopied ? 'bg-emerald-600 text-white shadow-emerald-600/20' : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/20'
+                }`}
+              >
+                {sqlCopied ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>{lang === 'ar' ? 'تم نسخ كود SQL بنجاح!' : 'Copié avec succès !'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>{lang === 'ar' ? 'نسخ كود SQL بالكامل' : 'Copier tout le code SQL'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

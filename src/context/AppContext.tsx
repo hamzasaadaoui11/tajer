@@ -44,7 +44,7 @@ interface AppContextType {
   // Entities
   business: Business;
   setBusiness: (biz: Business) => void;
-  updateBusiness: (bizData: Partial<Business>) => void;
+  updateBusiness: (bizData: Partial<Business>) => Promise<{ success: boolean; error?: string }> | void;
   branch: Branch;
   setBranch: (branch: Branch) => void;
   user: User;
@@ -267,6 +267,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         if (!error && remoteBiz && remoteBiz.name) {
+          const localBiz = db.getBusiness(remoteBiz.id) || db.get<Business>('businesses')[0];
+          const finalLogo = remoteBiz.logo || localBiz?.logo || '';
+          const finalStamp = (remoteBiz.stamp && remoteBiz.stamp !== 'DISABLED')
+            ? remoteBiz.stamp
+            : (remoteBiz.stamp === 'DISABLED' ? '' : (localBiz?.stamp === 'DISABLED' ? '' : (localBiz?.stamp || '')));
+          const finalStampEnabled = remoteBiz.stamp === 'DISABLED'
+            ? false
+            : (remoteBiz.stamp_enabled ?? (localBiz?.stampEnabled ?? true));
+
           const restored: Business = {
             id: remoteBiz.id,
             name: remoteBiz.name,
@@ -280,9 +289,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             rc: remoteBiz.rc || '',
             patente: remoteBiz.patente || '',
             cnss: remoteBiz.cnss || '',
-            logo: remoteBiz.logo || '',
-            stamp: remoteBiz.stamp === 'DISABLED' ? '' : (remoteBiz.stamp || ''),
-            stampEnabled: remoteBiz.stamp === 'DISABLED' ? false : (remoteBiz.stamp_enabled ?? true),
+            logo: finalLogo,
+            stamp: finalStamp,
+            stampEnabled: finalStampEnabled,
             invoiceColor: remoteBiz.invoice_color || '#C02626',
             receiptFooter: remoteBiz.receipt_footer || '',
             a4Footer: remoteBiz.a4_footer || '',
@@ -296,6 +305,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
 
           db.saveBusiness(restored);
+          // If local had a logo or stamp that was not in Supabase yet, push it up to Supabase immediately
+          if ((!remoteBiz.logo && finalLogo) || (!remoteBiz.stamp && finalStamp)) {
+            syncEngine.saveBusinessEverywhere(restored).catch(() => {});
+          }
+
           db.setOnboardingComplete(true);
 
           // Preserve existing local tables; only initialize if empty
@@ -986,8 +1000,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateBusiness = (bizData: Partial<Business>) => {
-    const updated = { ...business, ...bizData };
+  const updateBusiness = async (bizData: Partial<Business>): Promise<{ success: boolean; error?: string }> => {
+    const updated: Business = { 
+      ...business, 
+      ...bizData,
+      phone: bizData.phone !== undefined ? bizData.phone : (business.phone || ''),
+      city: bizData.city !== undefined ? bizData.city : (business.city || ''),
+      address: bizData.address !== undefined ? bizData.address : (business.address || ''),
+    };
     setBusinessState(updated);
     db.saveBusiness(updated);
     if (user && bizData.name) {
@@ -995,7 +1015,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUserState(updatedUser);
       db.saveUser(updatedUser);
     }
+
+    // Keep the main branch synchronized with the business address/city/phone
+    try {
+      const branches = db.getBranches(business.id);
+      const mainBranch = branches.find(b => b.is_main) || branches[0];
+      if (mainBranch) {
+        const updatedBranch: Branch = {
+          ...mainBranch,
+          ...(bizData.city !== undefined ? { city: bizData.city } : {}),
+          ...(bizData.address !== undefined ? { address: bizData.address } : {}),
+          ...(bizData.phone !== undefined ? { phone: bizData.phone } : {}),
+        };
+        db.addBranch(updatedBranch);
+        setBranchState(updatedBranch);
+      }
+    } catch (bErr) {
+      console.warn('Update branch in updateBusiness error:', bErr);
+    }
+
     refreshData();
+    // Directly push to Supabase so it is permanently stored in the cloud
+    const result = await syncEngine.saveBusinessEverywhere(updated);
+    return result;
   };
 
   const switchUser = (u: User) => {

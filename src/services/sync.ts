@@ -1,7 +1,7 @@
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { db } from './db';
 import { imageService } from './imageService';
-import { Product, Customer, Supplier, Sale } from '../types';
+import { Product, Customer, Supplier, Sale, Business } from '../types';
 
 export interface SyncResult {
   success: boolean;
@@ -1248,6 +1248,79 @@ class SyncEngine {
         }
       } catch (err) {
         console.warn('Direct delete product failed:', err);
+      }
+    }
+    return { success: true };
+  }
+
+  // Instant multi-device business profile & logo save/update
+  public async saveBusinessEverywhere(business: Business): Promise<{ success: boolean; error?: string }> {
+    // 1. Save locally
+    db.saveBusiness(business);
+
+    // 2. Direct cloud upsert if online
+    const supabase = getSupabase();
+    if (supabase && isSupabaseConfigured() && navigator.onLine) {
+      try {
+        const payload = {
+          id: business.id,
+          name: business.name,
+          activity: business.activity || 'general_store',
+          currency: business.currency || 'MAD',
+          phone: business.phone || null,
+          address: business.address || null,
+          city: business.city || null,
+          ice: business.ice || null,
+          if_number: business.ifNumber || null,
+          rc: business.rc || null,
+          patente: business.patente || null,
+          cnss: business.cnss || null,
+          logo: business.logo || null,
+          stamp: (business.stampEnabled === false || business.stamp === 'DISABLED')
+            ? 'DISABLED'
+            : (business.stamp || null),
+          invoice_color: business.invoiceColor || '#C02626',
+          receipt_footer: business.receiptFooter || null,
+          a4_footer: business.a4Footer || null,
+          bank_info: business.bankInfo || null,
+          capital: business.capital || null,
+          email: business.email || null,
+          tax_enabled: business.taxEnabled ?? false,
+          default_tax_rate: business.defaultTaxRate ?? 20,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error } = await supabase.from('businesses').upsert(payload, { onConflict: 'id' });
+        if (error) {
+          console.warn('Direct save business error:', error.message);
+          return { success: false, error: error.message };
+        }
+
+        // Also sync main branch
+        try {
+          const branches = db.getBranches(business.id);
+          const mainBranch = branches.find(b => b.is_main) || branches[0];
+          if (mainBranch) {
+            const branchPayload = {
+              id: mainBranch.id,
+              business_id: business.id,
+              name: mainBranch.name || 'الفرع الرئيسي',
+              city: business.city || null,
+              address: business.address || null,
+              phone: business.phone || null,
+              is_main: true,
+              created_at: mainBranch.created_at || new Date().toISOString(),
+            };
+            await supabase.from('branches').upsert(branchPayload, { onConflict: 'id' });
+          }
+        } catch (brErr) {
+          console.warn('Sync branch during saveBusinessEverywhere error:', brErr);
+        }
+
+        return { success: true };
+      } catch (err: any) {
+        console.warn('Direct save business failed:', err);
+        return { success: false, error: err?.message || 'خطأ في الاتصال' };
       }
     }
     return { success: true };

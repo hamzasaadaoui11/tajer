@@ -39,7 +39,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [cName, setCName] = useState('');
   const [cPhone, setCPhone] = useState('');
-  const [cCity, setCCity] = useState(lang === 'ar' ? 'الدار البيضاء' : 'Casablanca');
+  const [cCity, setCCity] = useState(business.city || '');
   const [cAddress, setCAddress] = useState('');
   const [cIce, setCIce] = useState('');
   const [cCreditLimit, setCCreditLimit] = useState('');
@@ -49,7 +49,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [sName, setSName] = useState('');
   const [sPhone, setSPhone] = useState('');
-  const [sCity, setSCity] = useState(lang === 'ar' ? 'الدار البيضاء' : 'Casablanca');
+  const [sCity, setSCity] = useState(business.city || '');
   const [sAddress, setSAddress] = useState('');
   const [sIce, setSIce] = useState('');
 
@@ -153,7 +153,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
               setEditingCustomer(null);
               setCName('');
               setCPhone('');
-              setCCity(lang === 'ar' ? 'الدار البيضاء' : 'Casablanca');
+              setCCity(business.city || '');
               setCAddress('');
               setCIce('');
               setCCreditLimit('');
@@ -162,7 +162,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
               setEditingSupplier(null);
               setSName('');
               setSPhone('');
-              setSCity(lang === 'ar' ? 'الدار البيضاء' : 'Casablanca');
+              setSCity(business.city || '');
               setSAddress('');
               setSIce('');
               setIsSupplierModalOpen(true);
@@ -219,7 +219,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
                 setEditingCustomer(null);
                 setCName('');
                 setCPhone('');
-                setCCity(lang === 'ar' ? 'الدار البيضاء' : 'Casablanca');
+                setCCity(business.city || '');
                 setCAddress('');
                 setCIce('');
                 setCCreditLimit('');
@@ -255,7 +255,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
                 setEditingSupplier(null);
                 setSName('');
                 setSPhone('');
-                setSCity(lang === 'ar' ? 'الدار البيضاء' : 'Casablanca');
+                setSCity(business.city || '');
                 setSAddress('');
                 setSIce('');
                 setIsSupplierModalOpen(true);
@@ -313,7 +313,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
                     setEditingCustomer(c);
                     setCName(c.name);
                     setCPhone(c.phone);
-                    setCCity(c.city || (lang === 'ar' ? 'الدار البيضاء' : 'Casablanca'));
+                    setCCity(c.city || '');
                     setCAddress(c.address || '');
                     setCIce(c.ice || '');
                     setCCreditLimit(c.credit_limit ? c.credit_limit.toString() : '');
@@ -382,7 +382,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({ initialType = 'custo
                     setEditingSupplier(s);
                     setSName(s.name);
                     setSPhone(s.phone);
-                    setSCity(s.city || (lang === 'ar' ? 'الدار البيضاء' : 'Casablanca'));
+                    setSCity(s.city || '');
                     setSAddress(s.address || '');
                     setSIce(s.ice || '');
                     setIsSupplierModalOpen(true);
