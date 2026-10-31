@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS public.businesses (
     logo_size NUMERIC DEFAULT 85,
     stamp TEXT,
     invoice_color TEXT DEFAULT '#C02626',
+    amount_in_words_enabled BOOLEAN DEFAULT true,
     receipt_footer TEXT,
     a4_footer TEXT,
     bank_info TEXT,
@@ -49,6 +50,7 @@ ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS logo TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS logo_size NUMERIC DEFAULT 85;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS stamp TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS invoice_color TEXT DEFAULT '#C02626';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS amount_in_words_enabled BOOLEAN DEFAULT true;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS receipt_footer TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS a4_footer TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS bank_info TEXT;

@@ -666,27 +666,29 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({
                   </table>
 
                   {/* Totals & Payment Summary */}
-                  <div className="flex justify-between items-start mt-6 gap-6">
-                    <div className={`w-1/2 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-                      {/* Arrêté la presente facture a la somme de */}
-                      <div className={`bg-slate-50 border border-slate-200 rounded-xl p-3.5 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                          {lang === 'ar' ? 'صُفّيت هذه الفاتورة عند المبلغ الإجمالي التالي :' : 'Arrêté le présent bon d\'achat à la somme de :'}
-                        </p>
-                        <p className="text-xs font-bold text-slate-800 mt-1.5 leading-relaxed">
-                          <span className="text-teal-700 font-black">
-                            {lang === 'ar' ? convertNumberToArabicWords(purchase.total) : convertNumberToFrenchWords(purchase.total)}
-                          </span>
-                          <span className="text-slate-400 font-mono text-[11px] block mt-1">
-                            {lang === 'ar' 
-                              ? `أي ما يعادل: ${formatMAD(purchase.total, 'ar')}${business.taxEnabled ? ' (بما فيها جميع الرسوم والضرائب)' : ''}` 
-                              : `Soit un montant de : ${formatMAD(purchase.total, 'fr')}${business.taxEnabled ? ' (Toutes Taxes Comprises)' : ''}`}
-                          </span>
-                        </p>
+                  <div className={`flex items-start mt-6 gap-6 ${business.amountInWordsEnabled !== false ? 'justify-between' : 'justify-end'}`}>
+                    {business.amountInWordsEnabled !== false && (
+                      <div className={`w-1/2 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+                        {/* Arrêté la presente facture a la somme de */}
+                        <div className={`bg-slate-50 border border-slate-200 rounded-xl p-3.5 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            {lang === 'ar' ? 'صُفّيت هذه الفاتورة عند المبلغ الإجمالي التالي :' : 'Arrêté le présent bon d\'achat à la somme de :'}
+                          </p>
+                          <p className="text-xs font-bold text-slate-800 mt-1.5 leading-relaxed">
+                            <span className="text-teal-700 font-black">
+                              {lang === 'ar' ? convertNumberToArabicWords(purchase.total) : convertNumberToFrenchWords(purchase.total)}
+                            </span>
+                            <span className="text-slate-400 font-mono text-[11px] block mt-1">
+                              {lang === 'ar' 
+                                ? `أي ما يعادل: ${formatMAD(purchase.total, 'ar')}${business.taxEnabled ? ' (بما فيها جميع الرسوم والضرائب)' : ''}` 
+                                : `Soit un montant de : ${formatMAD(purchase.total, 'fr')}${business.taxEnabled ? ' (Toutes Taxes Comprises)' : ''}`}
+                            </span>
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div className={`w-5/12 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+                    <div className={`${business.amountInWordsEnabled !== false ? 'w-5/12' : 'w-80'} ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
                         <div className="flex justify-between text-slate-600">
                           <span>{lang === 'ar' ? 'المجموع الإجمالي :' : 'Total Brut :'}</span>

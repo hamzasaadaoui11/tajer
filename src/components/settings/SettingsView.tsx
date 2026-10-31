@@ -156,6 +156,9 @@ export const SettingsView: React.FC = () => {
       : (business.stamp !== 'DISABLED')
   );
   const [invoiceColor, setInvoiceColor] = useState(business.invoiceColor || '#C02626');
+  const [amountInWordsEnabled, setAmountInWordsEnabled] = useState(business.amountInWordsEnabled !== false);
+  const [amountInWordsSaving, setAmountInWordsSaving] = useState(false);
+  const [amountInWordsSaved, setAmountInWordsSaved] = useState(false);
 
   // TVA Settings States
   const [taxEnabled, setTaxEnabled] = useState(business.taxEnabled ?? false);
@@ -202,6 +205,7 @@ export const SettingsView: React.FC = () => {
     if (business.stamp !== undefined) setStamp(business.stamp === 'DISABLED' ? '' : (business.stamp || ''));
     if (business.stampEnabled !== undefined) setStampEnabled(business.stampEnabled);
     if (business.invoiceColor !== undefined) setInvoiceColor(business.invoiceColor || '#C02626');
+    if (business.amountInWordsEnabled !== undefined) setAmountInWordsEnabled(business.amountInWordsEnabled !== false);
     if (business.taxEnabled !== undefined) setTaxEnabled(business.taxEnabled ?? false);
     if (business.defaultTaxRate !== undefined) setDefaultTaxRate(business.defaultTaxRate ?? 20);
   }, [
@@ -223,6 +227,7 @@ export const SettingsView: React.FC = () => {
     business.stamp,
     business.stampEnabled,
     business.invoiceColor,
+    business.amountInWordsEnabled,
     business.taxEnabled,
     business.defaultTaxRate,
   ]);
@@ -379,6 +384,22 @@ export const SettingsView: React.FC = () => {
     }
   };
 
+  // Direct amount in words toggle with instant cloud save
+  const handleToggleAmountInWords = async (enabled: boolean) => {
+    setAmountInWordsEnabled(enabled);
+    setAmountInWordsSaving(true);
+    setAmountInWordsSaved(false);
+    try {
+      await updateBusiness({ amountInWordsEnabled: enabled });
+      setAmountInWordsSaved(true);
+      setTimeout(() => setAmountInWordsSaved(false), 3000);
+    } catch (e) {
+      console.warn('Error saving amountInWordsEnabled:', e);
+    } finally {
+      setAmountInWordsSaving(false);
+    }
+  };
+
   // Direct branding save button
   const handleSaveBrandingNow = async () => {
     setBrandingSaving(true);
@@ -390,6 +411,7 @@ export const SettingsView: React.FC = () => {
         stamp: stampEnabled ? stamp : 'DISABLED',
         stampEnabled,
         invoiceColor,
+        amountInWordsEnabled,
       });
       setBrandingSaved(true);
       setTimeout(() => setBrandingSaved(false), 4000);
@@ -508,6 +530,7 @@ export const SettingsView: React.FC = () => {
         stamp: stampEnabled ? stamp : 'DISABLED',
         stampEnabled,
         invoiceColor,
+        amountInWordsEnabled,
       });
       setGeneralSaving(false);
       if (res && res.success === false) {
@@ -548,6 +571,7 @@ export const SettingsView: React.FC = () => {
         stamp: stampEnabled ? stamp : 'DISABLED',
         stampEnabled,
         invoiceColor,
+        amountInWordsEnabled,
         taxEnabled,
         defaultTaxRate,
       });
@@ -1130,6 +1154,65 @@ export const SettingsView: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Amount in Words (Chiffre en lettres) Toggle Card */}
+                  <div className={`p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-150 dark:border-slate-700/60 shadow-xs ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            {lang === 'ar' ? 'كتابة المبلغ بالحروف (Chiffre en lettres)' : 'Montant en toutes lettres (Chiffre en lettres)'}
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition ${
+                            amountInWordsEnabled 
+                              ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60' 
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700'
+                          }`}>
+                            {amountInWordsEnabled ? (lang === 'ar' ? '✓ مفعل حالياً' : '✓ Activé') : (lang === 'ar' ? '✕ معطل' : '✕ Désactivé')}
+                          </span>
+                          {amountInWordsSaving && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>{lang === 'ar' ? 'جاري الحفظ سحابياً...' : 'Sauvegarde...'}</span>
+                            </span>
+                          )}
+                          {amountInWordsSaved && !amountInWordsSaving && (
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 animate-in fade-in">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>{lang === 'ar' ? '✓ تم الحفظ في قاعدة البيانات!' : '✓ Enregistré en base !'}</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl">
+                          {lang === 'ar'
+                            ? 'إظهار أو إخفاء سطر "صُفّيت هذه الفاتورة عند المبلغ الإجمالي التالي بالحروف" في أسفل فواتير المبيعات ووصولات الشراء A4. يكون مفعلاً افتراضياً ويمكنك تعطيله في أي وقت.'
+                            : 'Afficher ou masquer la mention "Arrêtée la présente facture à la somme de..." en lettres sur les factures et bons d\'achat A4. Activé par défaut.'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0 pt-1 sm:pt-0">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAmountInWords(!amountInWordsEnabled)}
+                          disabled={amountInWordsSaving}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            amountInWordsEnabled ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-600'
+                          } ${amountInWordsSaving ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          role="switch"
+                          aria-checked={amountInWordsEnabled}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                              amountInWordsEnabled 
+                                ? (lang === 'ar' ? '-translate-x-5' : 'translate-x-5') 
+                                : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Live Invoice Preview Sample */}
                   <div className="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 space-y-3">
                     <div className="flex items-center justify-between">
@@ -1211,6 +1294,22 @@ export const SettingsView: React.FC = () => {
                           150,00 د.م.
                         </span>
                       </div>
+
+                      {/* Live Amount in words preview in sample */}
+                      {amountInWordsEnabled ? (
+                        <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 text-[10px] space-y-0.5">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                            {lang === 'ar' ? 'صُفّيت هذه الفاتورة عند المبلغ الإجمالي التالي :' : 'Arrêtée la présente facture à la somme de :'}
+                          </p>
+                          <p className="font-bold text-teal-700 dark:text-teal-400">
+                            {lang === 'ar' ? 'مائة وخمسون درهم لا غير' : 'Cent cinquante dirhams TTC'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-[10px] text-slate-400 text-center">
+                          {lang === 'ar' ? '✕ تم إخفاء كتابة المبلغ بالحروف' : '✕ Montant en lettres masqué'}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1984,6 +2083,7 @@ CREATE TABLE IF NOT EXISTS public.businesses (
     logo TEXT,
     stamp TEXT,
     invoice_color TEXT DEFAULT '#C02626',
+    amount_in_words_enabled BOOLEAN DEFAULT true,
     receipt_footer TEXT,
     a4_footer TEXT,
     bank_info TEXT,
@@ -2010,6 +2110,7 @@ ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS cnss TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS logo TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS stamp TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS invoice_color TEXT DEFAULT '#C02626';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS amount_in_words_enabled BOOLEAN DEFAULT true;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS receipt_footer TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS a4_footer TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS bank_info TEXT;
@@ -2086,6 +2187,7 @@ CREATE TABLE IF NOT EXISTS public.businesses (
     logo TEXT,
     stamp TEXT,
     invoice_color TEXT DEFAULT '#C02626',
+    amount_in_words_enabled BOOLEAN DEFAULT true,
     receipt_footer TEXT,
     a4_footer TEXT,
     bank_info TEXT,
@@ -2112,6 +2214,7 @@ ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS cnss TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS logo TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS stamp TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS invoice_color TEXT DEFAULT '#C02626';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS amount_in_words_enabled BOOLEAN DEFAULT true;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS receipt_footer TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS a4_footer TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS bank_info TEXT;

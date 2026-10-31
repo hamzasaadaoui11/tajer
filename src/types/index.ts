@@ -37,6 +37,7 @@ export interface Business {
   stamp?: string; // Cachet / Signature de l'entreprise (Base64)
   stampEnabled?: boolean; // Activer / Désactiver le cachet sur les factures A4
   invoiceColor?: string; // Hex color for invoices (default '#C02626')
+  amountInWordsEnabled?: boolean; // Activer / Désactiver le montant en toutes lettres (Chiffre en lettres)
   receiptFooter?: string;
   a4Footer?: string; // Pied de page personnalisé pour Facture A4
   bankInfo?: string; // RIB / Nom de la banque

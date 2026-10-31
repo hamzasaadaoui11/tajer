@@ -797,23 +797,25 @@ export const ReceiptModal: React.FC = () => {
                   </div>
 
                   {/* Totals & Notes Row */}
-                  <div className="flex justify-between items-start gap-8 mt-6">
+                  <div className={`flex items-start gap-8 mt-6 ${business.amountInWordsEnabled !== false ? 'justify-between' : 'justify-end'}`}>
                     {/* Arrêté la presente facture a la somme de */}
-                    <div className={`bg-slate-50 border border-slate-200 rounded-lg p-3.5 max-w-sm ${lang === 'ar' ? 'text-right' : 'text-left'} flex-1`}>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        {lang === 'ar' ? 'صُفّيت هذه الفاتورة عند المبلغ الإجمالي التالي :' : 'Arrêtée la présente facture à la somme de :'}
-                      </p>
-                      <p className="text-xs font-bold text-slate-800 mt-1.5 leading-relaxed">
-                        <span className="text-teal-700 font-black">
-                          {lang === 'ar' ? convertNumberToArabicWords(activeSaleReceipt.total) : convertNumberToFrenchWords(activeSaleReceipt.total)}
-                        </span>
-                        <span className="text-slate-400 font-mono text-[11px] block mt-1">
-                          {lang === 'ar' 
-                            ? `أي ما يعادل: ${formatMAD(activeSaleReceipt.total, 'ar')}${business.taxEnabled ? ' (بما فيها جميع الرسوم والضرائب)' : ''}` 
-                            : `Soit un montant de : ${formatMAD(activeSaleReceipt.total, 'fr')}${business.taxEnabled ? ' (Toutes Taxes Comprises)' : ''}`}
-                        </span>
-                      </p>
-                    </div>
+                    {business.amountInWordsEnabled !== false && (
+                      <div className={`bg-slate-50 border border-slate-200 rounded-lg p-3.5 max-w-sm ${lang === 'ar' ? 'text-right' : 'text-left'} flex-1`}>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          {lang === 'ar' ? 'صُفّيت هذه الفاتورة عند المبلغ الإجمالي التالي :' : 'Arrêtée la présente facture à la somme de :'}
+                        </p>
+                        <p className="text-xs font-bold text-slate-800 mt-1.5 leading-relaxed">
+                          <span className="text-teal-700 font-black">
+                            {lang === 'ar' ? convertNumberToArabicWords(activeSaleReceipt.total) : convertNumberToFrenchWords(activeSaleReceipt.total)}
+                          </span>
+                          <span className="text-slate-400 font-mono text-[11px] block mt-1">
+                            {lang === 'ar' 
+                              ? `أي ما يعادل: ${formatMAD(activeSaleReceipt.total, 'ar')}${business.taxEnabled ? ' (بما فيها جميع الرسوم والضرائب)' : ''}` 
+                              : `Soit un montant de : ${formatMAD(activeSaleReceipt.total, 'fr')}${business.taxEnabled ? ' (Toutes Taxes Comprises)' : ''}`}
+                          </span>
+                        </p>
+                      </div>
+                    )}
 
                     {/* Totals Breakdown */}
                     <div className="w-80 shrink-0 space-y-2 text-xs">

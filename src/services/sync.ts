@@ -189,6 +189,7 @@ class SyncEngine {
             ? 'DISABLED' 
             : (init.business.stamp || null),
           invoice_color: init.business.invoiceColor || '#C02626',
+          amount_in_words_enabled: init.business.amountInWordsEnabled !== false,
           receipt_footer: init.business.receiptFooter || null,
           a4_footer: init.business.a4Footer || null,
           bank_info: init.business.bankInfo || null,
@@ -198,7 +199,14 @@ class SyncEngine {
           default_tax_rate: init.business.defaultTaxRate ?? 20,
           updated_at: new Date().toISOString(),
         };
-        const { error: bizErr } = await supabase.from('businesses').upsert(bizPayload);
+        let { error: bizErr } = await supabase.from('businesses').upsert(bizPayload);
+        if (bizErr && (bizErr.message?.includes('amount_in_words_enabled') || bizErr.message?.includes('invoice_color'))) {
+          const fb = { ...bizPayload };
+          delete (fb as any).amount_in_words_enabled;
+          delete (fb as any).invoice_color;
+          const retry = await supabase.from('businesses').upsert(fb);
+          bizErr = retry.error;
+        }
         if (bizErr) {
           errors.push(`المتجر (Business): ${bizErr.message}`);
         } else {
@@ -1281,6 +1289,7 @@ class SyncEngine {
             ? 'DISABLED'
             : (business.stamp || null),
           invoice_color: business.invoiceColor || '#C02626',
+          amount_in_words_enabled: business.amountInWordsEnabled !== false,
           receipt_footer: business.receiptFooter || null,
           a4_footer: business.a4Footer || null,
           bank_info: business.bankInfo || null,
@@ -1292,11 +1301,12 @@ class SyncEngine {
         };
 
         let { error } = await supabase.from('businesses').upsert(payload, { onConflict: 'id' });
-        if (error && (error.message?.includes('invoice_color') || error.message?.includes('logo_size'))) {
+        if (error && (error.message?.includes('invoice_color') || error.message?.includes('logo_size') || error.message?.includes('amount_in_words_enabled'))) {
           console.warn('New settings columns missing in Supabase schema, retrying without them:', error.message);
           const fallbackPayload = { ...payload };
           delete (fallbackPayload as any).invoice_color;
           delete (fallbackPayload as any).logo_size;
+          delete (fallbackPayload as any).amount_in_words_enabled;
           const retry = await supabase.from('businesses').upsert(fallbackPayload, { onConflict: 'id' });
           error = retry.error;
         }

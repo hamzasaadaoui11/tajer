@@ -453,6 +453,7 @@ class LocalDatabase {
         patente: '',
         taxEnabled: false,
         defaultTaxRate: 20,
+        amountInWordsEnabled: true,
         receiptFooter: '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

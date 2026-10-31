@@ -311,6 +311,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             stamp: finalStamp,
             stampEnabled: finalStampEnabled,
             invoiceColor: finalInvoiceColor,
+            amountInWordsEnabled: remoteBiz.amount_in_words_enabled !== undefined 
+              ? (remoteBiz.amount_in_words_enabled ?? true) 
+              : (localBiz?.amountInWordsEnabled ?? true),
             receiptFooter: localBiz?.receiptFooter || remoteBiz.receipt_footer || '',
             a4Footer: localBiz?.a4Footer || remoteBiz.a4_footer || '',
             bankInfo: localBiz?.bankInfo || remoteBiz.bank_info || '',
