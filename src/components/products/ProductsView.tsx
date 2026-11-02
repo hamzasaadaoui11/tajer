@@ -90,6 +90,7 @@ export const ProductsView: React.FC = () => {
 
   // Product Image Zoom Modal State
   const [zoomedProduct, setZoomedProduct] = useState<Product | null>(null);
+  const [isPullingCloud, setIsPullingCloud] = useState(false);
 
   const products = useMemo(() => {
     const list = db.getProducts(business.id, branch.id);
@@ -102,7 +103,15 @@ export const ProductsView: React.FC = () => {
     db.loadFromIndexedDB().then(() => {
       refreshData();
     });
-  }, [refreshData]);
+    const currentProds = db.getProducts(business.id);
+    if (currentProds.length === 0) {
+      syncEngine.pullProductsDirectly(business.id).then(res => {
+        if (res.count > 0) {
+          refreshData();
+        }
+      });
+    }
+  }, [refreshData, business.id]);
 
 
 
@@ -697,6 +706,24 @@ export const ProductsView: React.FC = () => {
             </p>
             {products.length === 0 && (
               <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                <button
+                  onClick={async () => {
+                    setIsPullingCloud(true);
+                    try {
+                      const res = await syncEngine.pullProductsDirectly(business.id);
+                      if (res.count > 0) {
+                        refreshData();
+                      }
+                    } finally {
+                      setIsPullingCloud(false);
+                    }
+                  }}
+                  disabled={isPullingCloud}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-300 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+                >
+                  <RotateCcw className={`w-4 h-4 ${isPullingCloud ? 'animate-spin' : ''}`} />
+                  <span>{isPullingCloud ? (lang === 'ar' ? 'جاري التحميل...' : 'Chargement...') : (lang === 'ar' ? 'استرجاع السلع من السحابة' : 'Restaurer depuis le cloud')}</span>
+                </button>
                 <button
                   onClick={handleOpenNew}
                   className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition cursor-pointer"

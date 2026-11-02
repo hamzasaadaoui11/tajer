@@ -203,6 +203,18 @@ export const POSView: React.FC = () => {
     return result;
   }, [products, selectedCategoryId, searchQuery]);
 
+  // Self-healing check: if products list is empty, trigger a direct pull from Supabase immediately
+  useEffect(() => {
+    const list = db.getProducts(business.id);
+    if (list.length === 0) {
+      syncEngine.pullProductsDirectly(business.id).then(res => {
+        if (res.count > 0) {
+          refreshData();
+        }
+      });
+    }
+  }, [business.id, refreshData]);
+
   // Paginated Products calculation
   const itemsPerPage = 8;
   const totalPages = useMemo(() => {

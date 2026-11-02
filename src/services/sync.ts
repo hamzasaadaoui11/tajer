@@ -730,13 +730,37 @@ class SyncEngine {
 
       // 2.2 Pull Products & Merge safely without deleting valid local products
       try {
-        const candidateBizIds = Array.from(new Set([
+        let candidateBizIds = Array.from(new Set([
           bizId,
           db.getTenantId(),
           bizId.startsWith('biz-') ? bizId.replace('biz-', '') : `biz-${bizId}`
         ])).filter(Boolean);
 
-        const localProductsMap = new Map(db.getProducts(bizId).map(p => [p.id, p]));
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            const uid = session.user.id;
+            const uemail = (session.user.email || '').trim().toLowerCase();
+            candidateBizIds.push(uid, `biz-${uid.substring(0, 8)}`);
+            if (uemail) {
+              const { data: userBizList } = await supabase
+                .from('businesses')
+                .select('id')
+                .or(`id.eq.${uid},id.eq.biz-${uid.substring(0, 8)},email.eq.${uemail}`);
+              if (userBizList) {
+                for (const ub of userBizList) {
+                  if (ub.id) candidateBizIds.push(ub.id);
+                }
+              }
+            }
+          }
+        } catch {}
+        candidateBizIds = Array.from(new Set(candidateBizIds)).filter(Boolean);
+
+        const localProducts = db.getProducts(bizId);
+        const localProductsMap = new Map(localProducts.map(p => [p.id, p]));
+        const prodTombstones = new Set(db.getTombstones('products'));
+        const prodPendingDeletes = new Set(db.getDeleteQueue('products'));
 
         // Pull lightweight metadata (only 35KB!) to ensure 0.05s instant startup without mobile memory spikes
         const { data: remoteProducts, error: prodPullErr } = await supabase
@@ -781,18 +805,42 @@ class SyncEngine {
               };
             });
 
-          // Also preserve any genuinely new local products waiting to be synced
-          const pendingProdCreates = new Set(db.getPendingCreates('products'));
-          const localOnly = db.getProducts(bizId).filter(lp => pendingProdCreates.has(lp.id) && !remoteIds.has(lp.id));
-          const finalProducts = [...activeRemoteProducts, ...localOnly];
+          // SAFE MERGE & ANTI-WIPE PROTECTION:
+          // 1. If remote returned 0 products, but local products exist: NEVER WIPE!
+          if (activeRemoteProducts.length === 0 && localProducts.length > 0) {
+            console.warn('Sync notice: Remote returned 0 products while local has', localProducts.length, 'products. Preserving all local products.');
+            for (const lp of localProducts) {
+              if (!prodTombstones.has(lp.id) && !prodPendingDeletes.has(lp.id)) {
+                db.addPendingCreate('products', lp.id);
+              }
+            }
+          } else {
+            // 2. Build merged map starting with active remote products
+            const mergedMap = new Map<string, Product>();
+            for (const rp of activeRemoteProducts) {
+              mergedMap.set(rp.id, rp);
+            }
 
-          // Save ONCE atomically with all products! NEVER save partial 92 items first!
-          db.set('products', finalProducts);
-          processed += finalProducts.length;
+            // 3. Keep any local product that was NOT explicitly deleted by the user
+            for (const lp of localProducts) {
+              if (prodTombstones.has(lp.id) || prodPendingDeletes.has(lp.id)) {
+                continue; // User explicitly deleted this product
+              }
+              if (!mergedMap.has(lp.id)) {
+                // Product exists locally but not on remote: preserve it and queue to upload
+                mergedMap.set(lp.id, lp);
+                db.addPendingCreate('products', lp.id);
+              }
+            }
 
-          const currentSynced = db.getSyncedIds('products');
-          const newSynced = Array.from(new Set([...currentSynced, ...Array.from(remoteIds)]));
-          db.setSyncedIds('products', newSynced);
+            const finalProducts = Array.from(mergedMap.values());
+            db.set('products', finalProducts);
+            processed += finalProducts.length;
+
+            const currentSynced = db.getSyncedIds('products');
+            const newSynced = Array.from(new Set([...currentSynced, ...Array.from(remoteIds)]));
+            db.setSyncedIds('products', newSynced);
+          }
         }
       } catch (e) {
         console.warn('Pull products notice:', e);
@@ -1750,6 +1798,105 @@ class SyncEngine {
     } catch (e) {
       console.warn('Sync sale and stock notice:', e);
     }
+  }
+
+  public async pullProductsDirectly(targetBizId?: string): Promise<{ success: boolean; count: number }> {
+    const supabase = getSupabase();
+    if (!supabase || !isSupabaseConfigured() || !navigator.onLine) {
+      return { success: false, count: db.getProducts().length };
+    }
+
+    try {
+      const bizId = targetBizId || db.get<Business>('businesses')[0]?.id || db.getTenantId();
+      let candidateBizIds = Array.from(new Set([
+        bizId,
+        db.getTenantId(),
+        bizId && bizId.startsWith('biz-') ? bizId.replace('biz-', '') : `biz-${bizId}`
+      ])).filter(Boolean);
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const uid = session.user.id;
+          const uemail = (session.user.email || '').trim().toLowerCase();
+          candidateBizIds.push(uid, `biz-${uid.substring(0, 8)}`);
+          if (uemail) {
+            const { data: userBizList } = await supabase
+              .from('businesses')
+              .select('id')
+              .or(`id.eq.${uid},id.eq.biz-${uid.substring(0, 8)},email.eq.${uemail}`);
+            if (userBizList) {
+              for (const ub of userBizList) {
+                if (ub.id) candidateBizIds.push(ub.id);
+              }
+            }
+          }
+        }
+      } catch {}
+      candidateBizIds = Array.from(new Set(candidateBizIds)).filter(Boolean);
+
+      const { data: remoteProducts, error } = await supabase
+        .from('products')
+        .select('*')
+        .in('business_id', candidateBizIds);
+
+      if (!error && remoteProducts && remoteProducts.length > 0) {
+        const localProducts = db.getProducts();
+        const localMap = new Map(localProducts.map(p => [p.id, p]));
+        const prodTombstones = new Set(db.getTombstones('products'));
+        const prodPendingDeletes = new Set(db.getDeleteQueue('products'));
+
+        const activeRemote: Product[] = (remoteProducts as any[])
+          .filter((rp: any) => rp.is_active !== false && !prodTombstones.has(rp.id) && !prodPendingDeletes.has(rp.id))
+          .map((rp: any) => {
+            const lp = localMap.get(rp.id);
+            return {
+              id: rp.id,
+              business_id: rp.business_id || bizId,
+              branch_id: rp.branch_id || lp?.branch_id || '',
+              category_id: rp.category_id,
+              barcode: rp.barcode || '',
+              sku: rp.sku || '',
+              name: rp.name,
+              description: rp.description,
+              purchase_price: Number(rp.purchase_price || 0),
+              sale_price: Number(rp.sale_price || 0),
+              wholesale_price: rp.wholesale_price ? Number(rp.wholesale_price) : undefined,
+              current_stock: lp ? lp.current_stock : Number(rp.current_stock || 0),
+              min_stock: Number(rp.min_stock || 0),
+              unit: rp.unit || 'قطعة',
+              tax_rate: Number(rp.tax_rate ?? 20),
+              is_active: true,
+              image_url: lp?.image_url || rp.image_url || '',
+              created_at: rp.created_at || new Date().toISOString(),
+              updated_at: rp.updated_at || new Date().toISOString(),
+            };
+          });
+
+        const mergedMap = new Map<string, Product>();
+        for (const rp of activeRemote) {
+          mergedMap.set(rp.id, rp);
+        }
+        for (const lp of localProducts) {
+          if (!prodTombstones.has(lp.id) && !prodPendingDeletes.has(lp.id) && !mergedMap.has(lp.id)) {
+            mergedMap.set(lp.id, lp);
+          }
+        }
+
+        const mergedProducts = Array.from(mergedMap.values());
+        db.set('products', mergedProducts);
+        db.setSyncedIds('products', Array.from(new Set([...db.getSyncedIds('products'), ...activeRemote.map(p => p.id)])));
+        this.notifySyncListeners({
+          success: true,
+          processed: activeRemote.length,
+          errors: []
+        });
+        return { success: true, count: mergedProducts.length };
+      }
+    } catch (e) {
+      console.warn('pullProductsDirectly error:', e);
+    }
+    return { success: false, count: db.getProducts().length };
   }
 }
 

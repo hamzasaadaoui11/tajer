@@ -266,7 +266,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
-        if (!error && remoteBiz && remoteBiz.name) {
+        // If bizList was empty or had no products, check if products exist under candidateBiz
+        if (!remoteBiz) {
+          const candidateBiz = [userId, `biz-${userId.substring(0, 8)}`];
+          const { data: pCheck } = await supabase.from('products').select('business_id').in('business_id', candidateBiz).limit(1);
+          if (pCheck && pCheck.length > 0 && pCheck[0].business_id) {
+            const { data: foundBiz } = await supabase.from('businesses').select('*').eq('id', pCheck[0].business_id).maybeSingle();
+            if (foundBiz) {
+              remoteBiz = foundBiz;
+            }
+          }
+        }
+
+        // Additional recovery for legacy businesses created with email: null
+        if (!remoteBiz && cleanEmail) {
+          const emailPrefix = cleanEmail.split('@')[0].trim();
+          if (emailPrefix && emailPrefix.length >= 4) {
+            const { data: matchedBiz } = await supabase
+              .from('businesses')
+              .select('*')
+              .is('email', null)
+              .ilike('name', `%${emailPrefix}%`)
+              .limit(1);
+            if (matchedBiz && matchedBiz.length > 0) {
+              remoteBiz = matchedBiz[0];
+            }
+          }
+        }
+
+        if (remoteBiz && !remoteBiz.email && cleanEmail) {
+          supabase.from('businesses').update({ email: cleanEmail }).eq('id', remoteBiz.id).then(() => {});
+        }
+
+        if (!error && remoteBiz) {
           const localBiz = db.getBusiness(remoteBiz.id) || db.get<Business>('businesses')[0];
           const finalName = (localBiz?.name && localBiz.name.trim() && !localBiz.name.includes('@'))
             ? localBiz.name
@@ -366,7 +398,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           } catch {}
 
-          // Pull products down to this device
+          // Pull products down to this device immediately
+          await syncEngine.pullProductsDirectly(restored.id);
           syncEngine.syncAll().catch(e => console.warn('Sync on new device restore notice:', e));
 
           return { completed: true, restoredBusiness: restored };
@@ -451,6 +484,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
                 // Direct online database synchronization before unveiling the view
                 try {
+                  const targetBizId = res.restoredBusiness?.id || tenantInit.business.id;
+                  await syncEngine.pullProductsDirectly(targetBizId);
                   await Promise.race([
                     syncEngine.syncAll(),
                     new Promise(resolve => setTimeout(resolve, 6000))
@@ -507,6 +542,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIsOnboardingComplete(res.completed);
           setIsAuthenticated(true);
           try {
+            const targetBizId = res.restoredBusiness?.id || tenantInit.business.id;
+            await syncEngine.pullProductsDirectly(targetBizId);
             await Promise.race([
               syncEngine.syncAll(),
               new Promise(resolve => setTimeout(resolve, 6000))
@@ -582,6 +619,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Await online database synchronization before concluding login so products are ready
         try {
+          const targetBizId = res.restoredBusiness?.id || tenantInit.business.id;
+          await syncEngine.pullProductsDirectly(targetBizId);
           await Promise.race([
             syncEngine.syncAll(),
             new Promise(resolve => setTimeout(resolve, 6000))

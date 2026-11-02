@@ -71,8 +71,26 @@ class LocalDatabase {
       }
       for (const k of keysToClean) {
         const val = localStorage.getItem(k);
-        if (val && (val.length > 250000 || val.includes('data:image/'))) {
-          // Instantly delete oversized/bloated string without parsing to prevent iOS WebKit watchdog timeout
+        if (!val) continue;
+
+        // Never delete product arrays; only strip heavy base64 images to protect quota and prevent loss
+        if (k.includes('products')) {
+          if (val.includes('data:image/')) {
+            try {
+              const parsed = JSON.parse(val);
+              if (Array.isArray(parsed)) {
+                const lightweight = parsed.map(item => {
+                  if (item?.image_url && item.image_url.startsWith('data:')) {
+                    return { ...item, image_url: '' };
+                  }
+                  return item;
+                });
+                localStorage.setItem(k, JSON.stringify(lightweight));
+              }
+            } catch {}
+          }
+        } else if (val.includes('data:image/') && val.length > 500000) {
+          // Non-product cache entries (e.g. temporary thumbnails)
           localStorage.removeItem(k);
         }
       }
@@ -94,26 +112,31 @@ class LocalDatabase {
     }
   }
 
-  public migrateGuestDataTo(newTenantId: string, newBusinessId: string): void {
+  public async migrateGuestDataTo(newTenantId: string, newBusinessId: string): Promise<void> {
     if (!newTenantId || newTenantId === 'default' || typeof window === 'undefined') return;
     try {
       const guestKey = 'tajer_db_default_products';
+      let guestProds: any[] | null = null;
       const guestRaw = localStorage.getItem(guestKey);
       if (guestRaw) {
-        const guestProds = JSON.parse(guestRaw);
-        if (Array.isArray(guestProds) && guestProds.length > 0) {
-          const currentTarget = this.get<Product>('products');
-          if (currentTarget.length === 0) {
-            const migrated = guestProds.map(p => ({
-              ...p,
-              business_id: newBusinessId,
-            }));
-            this.set('products', migrated);
-            migrated.forEach(p => {
-              this.addPendingCreate('products', p.id);
-            });
-            localStorage.removeItem(guestKey);
-          }
+        try { guestProds = JSON.parse(guestRaw); } catch {}
+      }
+      if (!guestProds || !Array.isArray(guestProds) || guestProds.length === 0) {
+        guestProds = (await idbGet<Product[]>(guestKey)) || null;
+      }
+
+      if (Array.isArray(guestProds) && guestProds.length > 0) {
+        const currentTarget = this.get<Product>('products');
+        if (currentTarget.length === 0) {
+          const migrated = guestProds.map(p => ({
+            ...p,
+            business_id: newBusinessId,
+          }));
+          this.set('products', migrated);
+          migrated.forEach(p => {
+            this.addPendingCreate('products', p.id);
+          });
+          localStorage.removeItem(guestKey);
         }
       }
     } catch (e) {

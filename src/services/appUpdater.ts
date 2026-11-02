@@ -1,6 +1,6 @@
 import { registerSW } from 'virtual:pwa-register';
 
-export const CURRENT_APP_BUILD = '2026.10.10.1';
+export const CURRENT_APP_BUILD = '2026.11.02.2';
 const APP_VERSION_STORAGE_KEY = 'tajer_app_build_version';
 
 /**
@@ -65,12 +65,23 @@ function runVersionMigration(): void {
         caches.keys().then((names) => {
           names.forEach((name) => {
             // Delete old workbox / static caches
-            if (!name.includes(CURRENT_APP_BUILD)) {
-              caches.delete(name).catch(() => {});
-            }
+            caches.delete(name).catch(() => {});
           });
         }).catch(() => {});
       }
+
+      // If any local products keys contain empty arrays '[]', remove them so fresh data is pulled
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.includes('products')) {
+            const val = localStorage.getItem(k);
+            if (val === '[]') {
+              localStorage.removeItem(k);
+            }
+          }
+        }
+      } catch {}
 
       // Mark version as upgraded
       localStorage.setItem(APP_VERSION_STORAGE_KEY, CURRENT_APP_BUILD);
