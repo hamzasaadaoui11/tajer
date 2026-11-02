@@ -1471,25 +1471,31 @@ class LocalDatabase {
     const products = this.get<Product>('products');
     const effectiveBranchId = oldSale.branch_id;
 
+    const affectedProductIds = new Set<string>();
+
     // 1. Revert old stock changes (add back old items)
     for (const oldItem of oldSale.items) {
+      affectedProductIds.add(oldItem.product_id);
       const pIdx = products.findIndex(p => p.id === oldItem.product_id);
       if (pIdx !== -1) {
         products[pIdx].current_stock += oldItem.quantity;
         products[pIdx].updated_at = new Date().toISOString();
         this.addPendingCreate('products', products[pIdx].id);
+        this.removeSyncedId('products', products[pIdx].id);
       }
     }
 
     // 2. Apply new stock changes (subtract new items)
     let newSubtotal = 0;
     for (const newItem of newItems) {
+      affectedProductIds.add(newItem.product_id);
       newSubtotal += newItem.total;
       const pIdx = products.findIndex(p => p.id === newItem.product_id);
       if (pIdx !== -1) {
         products[pIdx].current_stock = Math.max(0, products[pIdx].current_stock - newItem.quantity);
         products[pIdx].updated_at = new Date().toISOString();
         this.addPendingCreate('products', products[pIdx].id);
+        this.removeSyncedId('products', products[pIdx].id);
       }
     }
     this.set('products', products);
@@ -1514,6 +1520,7 @@ class LocalDatabase {
     sales[sIdx] = oldSale;
     this.set('sales', sales);
     this.addPendingCreate('sales', oldSale.id);
+    this.removeSyncedId('sales', oldSale.id);
 
     // 5. Adjust cash transaction if cash amount changed
     if (newPaymentMethod === 'CASH' || newPaymentMethod === 'SPLIT') {

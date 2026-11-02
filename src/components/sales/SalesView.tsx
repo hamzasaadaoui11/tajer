@@ -40,6 +40,9 @@ export const SalesView: React.FC = () => {
   const [editCustomerId, setEditCustomerId] = useState('');
   const [editAmountPaid, setEditAmountPaid] = useState('0');
 
+  // Edit Sale Modal State
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+
   // Delete Sale Modal State
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -366,10 +369,20 @@ export const SalesView: React.FC = () => {
                   {/* View/Print Invoice */}
                   <button
                     onClick={() => setActiveSaleReceipt(sale)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition"
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition"
                   >
                     <Receipt className="w-3.5 h-3.5" />
                     <span>{lang === 'ar' ? 'عرض' : 'Voir'}</span>
+                  </button>
+
+                  {/* Edit Invoice (Modify Products, Quantities, Prices) */}
+                  <button
+                    onClick={() => setEditingSale(sale)}
+                    className="px-2.5 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition border border-teal-200/80 dark:border-teal-800"
+                    title={lang === 'ar' ? 'تعديل الفاتورة والسلع والأسعار' : 'Modifier la facture, articles et prix'}
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>{lang === 'ar' ? 'تعديل' : 'Modifier'}</span>
                   </button>
 
                   {/* Convert / Adjust Payment to Credit */}
@@ -837,6 +850,15 @@ export const SalesView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Sale Full Modal */}
+      {editingSale && (
+        <EditSaleModal
+          sale={editingSale}
+          onClose={() => setEditingSale(null)}
+          onSuccess={() => setEditingSale(null)}
+        />
       )}
 
     </div>

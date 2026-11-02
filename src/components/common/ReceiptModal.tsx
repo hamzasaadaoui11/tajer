@@ -10,7 +10,8 @@ import {
   Bluetooth,
   Smartphone,
   HelpCircle,
-  Loader2
+  Loader2,
+  Edit2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatMAD } from '../../i18n/locales';
@@ -19,6 +20,7 @@ import { thermalPrinterService } from '../../services/thermalPrinter';
 import { ThermalPrinterGuideModal } from './ThermalPrinterGuideModal';
 import { MobilePrintOptionsModal } from './MobilePrintOptionsModal';
 import { ReceiptImageModal } from './ReceiptImageModal';
+import { EditSaleModal } from '../sales/EditSaleModal';
 
 // Arabic number to words converter for Moroccan Dirhams (MAD)
 export function convertNumberToArabicWords(amount: number): string {
@@ -222,6 +224,7 @@ export const ReceiptModal: React.FC = () => {
   const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
   const [isBtPrinting, setIsBtPrinting] = useState(false);
   const [btSuccess, setBtSuccess] = useState(false);
+  const [isEditingSale, setIsEditingSale] = useState(false);
 
   const isMobile = thermalPrinterService.isMobile();
   const isAndroid = thermalPrinterService.isAndroid();
@@ -1085,8 +1088,20 @@ export const ReceiptModal: React.FC = () => {
           )}
         </div>
 
-        {/* Actions Bar (Print, Bluetooth, WhatsApp) */}
+        {/* Actions Bar (Print, Bluetooth, WhatsApp, Modifier) */}
         <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap gap-2 no-print justify-center items-center">
+          {/* Modify Sale Button */}
+          {activeSaleReceipt && (
+            <button
+              onClick={() => setIsEditingSale(true)}
+              className="flex-1 min-w-[110px] h-11 flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-extrabold text-xs sm:text-sm shadow-xs transition cursor-pointer active:scale-95"
+              title={lang === 'ar' ? 'تعديل السلع والكميات والأسعار في هذه الفاتورة' : 'Modifier les articles et prix'}
+            >
+              <Edit2 className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">{lang === 'ar' ? 'تعديل الفاتورة' : 'Modifier'}</span>
+            </button>
+          )}
+
           <button
             onClick={handleWhatsApp}
             className="flex-1 min-w-[120px] h-11 flex items-center justify-center gap-1.5 rounded-xl bg-[#00a884] hover:bg-[#008f6f] text-white font-extrabold text-xs sm:text-sm shadow-xs transition cursor-pointer active:scale-95"
@@ -1170,6 +1185,20 @@ export const ReceiptModal: React.FC = () => {
         title={lang === 'ar' ? `فاتورة-${activeSaleReceipt?.invoice_number || ''}` : `Facture-${activeSaleReceipt?.invoice_number || ''}`}
         lang={lang}
       />
+
+      {/* Edit Sale Modal */}
+      {isEditingSale && activeSaleReceipt && (
+        <EditSaleModal
+          sale={activeSaleReceipt}
+          onClose={() => setIsEditingSale(false)}
+          onSuccess={(updated) => {
+            if (updated) {
+              setActiveSaleReceipt(updated);
+            }
+            setIsEditingSale(false);
+          }}
+        />
+      )}
     </div>
   );
 };

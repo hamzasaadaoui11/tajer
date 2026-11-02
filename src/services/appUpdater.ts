@@ -1,7 +1,14 @@
 import { registerSW } from 'virtual:pwa-register';
 
-export const CURRENT_APP_BUILD = '2026.11.02.2';
+export const CURRENT_APP_BUILD = '2026.11.02.4';
 const APP_VERSION_STORAGE_KEY = 'tajer_app_build_version';
+
+// Listen for dynamic import errors and reload fresh bundle
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', () => {
+    window.location.reload();
+  });
+}
 
 /**
  * Initializes automatic PWA updates and cache migrations.
@@ -23,7 +30,7 @@ export function initAppAutoUpdater(): void {
         try {
           const lastReload = sessionStorage.getItem('tajer_sw_reload_ts');
           const now = Date.now();
-          if (!lastReload || now - parseInt(lastReload, 10) > 60000) {
+          if (!lastReload || now - parseInt(lastReload, 10) > 45000) {
             sessionStorage.setItem('tajer_sw_reload_ts', String(now));
             updateSW(true);
           }
@@ -35,6 +42,9 @@ export function initAppAutoUpdater(): void {
       onRegisteredSW(swUrl, registration) {
         console.log('[AutoUpdater] Service Worker registered at:', swUrl);
         if (registration) {
+          // Immediately check for updates on startup so user always gets latest code
+          registration.update().catch(() => {});
+
           // Check for updates periodically (every 10 minutes)
           setInterval(() => {
             registration.update().catch(() => {});
