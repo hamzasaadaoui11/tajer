@@ -1,9 +1,7 @@
-import { registerSW } from 'virtual:pwa-register';
-
-export const CURRENT_APP_BUILD = '2026.11.02.4';
+export const CURRENT_APP_BUILD = '2026.11.02.5';
 const APP_VERSION_STORAGE_KEY = 'tajer_app_build_version';
 
-// Listen for dynamic import errors and reload fresh bundle
+// Listen for dynamic import / chunk errors and auto-reload fresh code
 if (typeof window !== 'undefined') {
   window.addEventListener('vite:preloadError', () => {
     window.location.reload();
@@ -11,9 +9,8 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * Initializes automatic PWA updates and cache migrations.
- * Guarantees that users never have to clear cookies, reinstall the app,
- * or open private browser windows after any update.
+ * Initializes automatic updates and guarantees that normal browsers
+ * load directly, cleanly and instantly without ever showing "Can't open this page".
  */
 export function initAppAutoUpdater(): void {
   if (typeof window === 'undefined') return;
@@ -21,49 +18,17 @@ export function initAppAutoUpdater(): void {
   // 1. Check if application version changed and auto-migrate local storage
   runVersionMigration();
 
-  // 2. Register Service Worker with instant auto-update and client claiming
+  // 2. Self-healing: Proactively unregister any legacy or broken service workers
   try {
-    const updateSW = registerSW({
-      immediate: true,
-      onNeedRefresh() {
-        console.log('[AutoUpdater] New version detected! Checking reload guard...');
-        try {
-          const lastReload = sessionStorage.getItem('tajer_sw_reload_ts');
-          const now = Date.now();
-          if (!lastReload || now - parseInt(lastReload, 10) > 45000) {
-            sessionStorage.setItem('tajer_sw_reload_ts', String(now));
-            updateSW(true);
-          }
-        } catch {}
-      },
-      onOfflineReady() {
-        console.log('[AutoUpdater] PWA offline cache ready');
-      },
-      onRegisteredSW(swUrl, registration) {
-        console.log('[AutoUpdater] Service Worker registered at:', swUrl);
-        if (registration) {
-          // Immediately check for updates on startup so user always gets latest code
-          registration.update().catch(() => {});
-
-          // Check for updates periodically (every 10 minutes)
-          setInterval(() => {
-            registration.update().catch(() => {});
-          }, 10 * 60 * 1000);
-
-          // Check for updates when user switches back to the tab/app
-          document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-              registration.update().catch(() => {});
-            }
-          });
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (const reg of registrations) {
+          reg.unregister().catch(() => {});
         }
-      },
-      onRegisterError(error) {
-        console.warn('[AutoUpdater] SW registration warning:', error);
-      },
-    });
+      }).catch(() => {});
+    }
   } catch (err) {
-    console.warn('[AutoUpdater] PWA auto-updater initialization notice:', err);
+    console.warn('[AutoUpdater] SW cleanup notice:', err);
   }
 }
 
@@ -75,6 +40,15 @@ function runVersionMigration(): void {
     const previousVersion = localStorage.getItem(APP_VERSION_STORAGE_KEY);
     if (previousVersion !== CURRENT_APP_BUILD) {
       console.log(`[AutoUpdater] Upgrading application from ${previousVersion || 'initial'} to ${CURRENT_APP_BUILD}`);
+
+      // Clear any obsolete CacheStorage items that might block normal browsers
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          names.forEach(name => {
+            caches.delete(name).catch(() => {});
+          });
+        }).catch(() => {});
+      }
 
       // If any local products keys contain empty arrays '[]', remove them so fresh data is pulled
       try {

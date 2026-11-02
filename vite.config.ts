@@ -9,6 +9,32 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
+      {
+        name: 'sw-uninstaller',
+        configureServer(server: any) {
+          server.middlewares.use((req: any, res: any, next: any) => {
+            if (req.url === '/sw.js' || req.url === '/sw.js/') {
+              res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+              res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+              res.end(`
+self.addEventListener('install', (e) => self.skipWaiting());
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    Promise.all([
+      caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))),
+      self.registration.unregister()
+    ]).then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => clients.forEach(c => c.navigate && c.navigate(c.url)))
+  );
+});
+self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)));
+`);
+              return;
+            }
+            next();
+          });
+        }
+      },
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
