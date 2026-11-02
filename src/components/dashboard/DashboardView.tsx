@@ -50,10 +50,11 @@ export const DashboardView: React.FC = () => {
     let todayProfit = 0;
     for (const sale of todaySales) {
       let saleProfit = 0;
-      for (const item of sale.items) {
+      const items = Array.isArray(sale.items) ? sale.items : [];
+      for (const item of items) {
         saleProfit += (item.unit_price - item.purchase_price) * item.quantity;
       }
-      saleProfit -= sale.discount;
+      saleProfit -= (sale.discount || 0);
       todayProfit += Math.max(0, saleProfit);
     }
 
@@ -61,10 +62,10 @@ export const DashboardView: React.FC = () => {
     const currentCash = db.getCurrentCashBalance(business.id, branch.id);
 
     // Customer Debts (الكريدي)
-    const totalCustomerDebt = allCustomers.reduce((acc, c) => acc + c.total_debt, 0);
+    const totalCustomerDebt = allCustomers.reduce((acc, c) => acc + (c.total_debt || 0), 0);
 
     // Supplier Debts
-    const totalSupplierDebt = allSuppliers.reduce((acc, s) => acc + s.total_debt, 0);
+    const totalSupplierDebt = allSuppliers.reduce((acc, s) => acc + (s.total_debt || 0), 0);
 
     // Low stock products
     const lowStockProducts = allProducts.filter(p => p.current_stock <= p.min_stock);
@@ -72,7 +73,8 @@ export const DashboardView: React.FC = () => {
     // Top selling products
     const productSalesMap = new Map<string, { name: string; count: number; total: number }>();
     for (const s of allSales) {
-      for (const it of s.items) {
+      const sItems = Array.isArray(s.items) ? s.items : [];
+      for (const it of sItems) {
         const existing = productSalesMap.get(it.product_name) || { name: it.product_name, count: 0, total: 0 };
         existing.count += it.quantity;
         existing.total += it.total;
@@ -340,7 +342,7 @@ export const DashboardView: React.FC = () => {
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-300">
-                      {sale.items.length}
+                      {sale.items?.length || 0}
                     </div>
                     <div>
                       <div className="font-bold text-xs text-slate-900 dark:text-white">

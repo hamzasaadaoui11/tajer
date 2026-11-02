@@ -19,9 +19,15 @@ export function initAppAutoUpdater(): void {
     const updateSW = registerSW({
       immediate: true,
       onNeedRefresh() {
-        console.log('[AutoUpdater] New version detected! Activating new build...');
-        // Force the waiting worker to activate and reload
-        updateSW(true);
+        console.log('[AutoUpdater] New version detected! Checking reload guard...');
+        try {
+          const lastReload = sessionStorage.getItem('tajer_sw_reload_ts');
+          const now = Date.now();
+          if (!lastReload || now - parseInt(lastReload, 10) > 60000) {
+            sessionStorage.setItem('tajer_sw_reload_ts', String(now));
+            updateSW(true);
+          }
+        } catch {}
       },
       onOfflineReady() {
         console.log('[AutoUpdater] PWA offline cache ready');
@@ -59,16 +65,6 @@ function runVersionMigration(): void {
     const previousVersion = localStorage.getItem(APP_VERSION_STORAGE_KEY);
     if (previousVersion !== CURRENT_APP_BUILD) {
       console.log(`[AutoUpdater] Upgrading application from ${previousVersion || 'initial'} to ${CURRENT_APP_BUILD}`);
-
-      // Clear obsolete Service Worker caches
-      if ('caches' in window) {
-        caches.keys().then((names) => {
-          names.forEach((name) => {
-            // Delete old workbox / static caches
-            caches.delete(name).catch(() => {});
-          });
-        }).catch(() => {});
-      }
 
       // If any local products keys contain empty arrays '[]', remove them so fresh data is pulled
       try {

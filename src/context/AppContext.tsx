@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Business,
   Branch,
@@ -130,6 +130,9 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Concurrency guard to avoid onAuthStateChange and loginWithSupabase colliding
+  const isManualLoggingInRef = useRef<boolean>(false);
+
   // 1. Initial State from DB
   const [initData] = useState(() => db.initialize());
   const [business, setBusinessState] = useState<Business>(initData.business);
@@ -398,10 +401,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           } catch {}
 
-          // Pull products down to this device immediately
-          await syncEngine.pullProductsDirectly(restored.id);
-          syncEngine.syncAll().catch(e => console.warn('Sync on new device restore notice:', e));
-
           return { completed: true, restoredBusiness: restored };
         }
 
@@ -521,6 +520,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
+          // If manual loginWithSupabase is currently running, skip to avoid double execution and memory spikes
+          if (isManualLoggingInRef.current) return;
+
           db.setTenantId(session.user.id);
           const tenantInit = db.initialize({
             id: session.user.id,
@@ -577,6 +579,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
+    isManualLoggingInRef.current = true;
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -636,6 +639,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, error: lang === 'ar' ? 'فشل تسجيل الدخول' : 'Échec de connexion' };
     } catch (err: any) {
       return { success: false, error: err?.message || (lang === 'ar' ? 'حدث خطأ غير متوقع' : 'Une erreur est survenue') };
+    } finally {
+      isManualLoggingInRef.current = false;
     }
   };
 

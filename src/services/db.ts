@@ -1180,7 +1180,10 @@ class LocalDatabase {
     if (healed) {
       this.set('sales', raw);
     }
-    return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return all.map(s => ({
+      ...s,
+      items: Array.isArray(s.items) ? s.items : []
+    })).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   public createSale(sale: Sale): Sale {
@@ -1637,13 +1640,21 @@ class LocalDatabase {
   }
 
   public getSaleReturns(businessId: string): SaleReturn[] {
-    return this.get<SaleReturn>('sale_returns').filter(r => r.business_id === businessId);
+    return this.get<SaleReturn>('sale_returns')
+      .filter(r => r.business_id === businessId)
+      .map(r => ({
+        ...r,
+        items: Array.isArray(r.items) ? r.items : []
+      }));
   }
 
   // --- Purchases Execution ---
   public getPurchases(businessId: string, branchId?: string): Purchase[] {
     const all = this.get<Purchase>('purchases').filter(p => !p.business_id || p.business_id === businessId);
-    return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return all.map(p => ({
+      ...p,
+      items: Array.isArray(p.items) ? p.items : []
+    })).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   public createPurchase(purchase: Purchase): Purchase {
@@ -1780,7 +1791,12 @@ class LocalDatabase {
   }
 
   public getPurchaseReturns(businessId: string): PurchaseReturn[] {
-    return this.get<PurchaseReturn>('purchase_returns').filter(r => r.business_id === businessId);
+    return this.get<PurchaseReturn>('purchase_returns')
+      .filter(r => r.business_id === businessId)
+      .map(r => ({
+        ...r,
+        items: Array.isArray(r.items) ? r.items : []
+      }));
   }
 
   // --- Payments & Debt settlement ---
