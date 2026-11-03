@@ -168,10 +168,13 @@ export const ThermalPrinterGuideModal: React.FC<Props> = ({ isOpen, onClose, lan
                 ) : (
                   <>
                     <Bluetooth className="w-4 h-4" />
-                    <span>{lang === 'ar' ? 'تجربة الاتصال وطباعة تذكرة اختبار الآن' : 'Tester la connexion & Imprimer un ticket test'}</span>
+                    <span>{lang === 'ar' ? 'اختبار جاهزية الطابعة (تذكرة تجريبية فقط)' : 'Tester la connexion (Ticket test uniquement)'}</span>
                   </>
                 )}
               </button>
+              <p className="text-[10px] text-slate-500 text-center mt-1.5">
+                {lang === 'ar' ? 'ℹ️ هذا الزر مخصص للتأكد من ربط الطابعة فقط. لطباعة فاتورة البيع والسلع، أغلق هذا الدليل واضغط على زر "طباعة بلوتوث" في الفاتورة.' : 'ℹ️ Ce bouton teste uniquement la connexion. Pour imprimer la facture réelle, utilisez le bouton d\'impression de la facture.'}
+              </p>
             </div>
 
             {testResult && (

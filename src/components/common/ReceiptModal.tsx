@@ -235,7 +235,7 @@ export const ReceiptModal: React.FC = () => {
     const printEl = document.getElementById('printable-receipt');
     if (!printEl) return;
 
-    if (isMobile || isStandalone || !isWebBtSupported) {
+    if (!isWebBtSupported) {
       setIsMobileOptionsOpen(true);
       return;
     }
@@ -251,6 +251,7 @@ export const ReceiptModal: React.FC = () => {
         setBtSuccess(true);
         setTimeout(() => setBtSuccess(false), 3000);
       } else {
+        // If device was cancelled or connection issue, offer mobile options fallback
         setIsMobileOptionsOpen(true);
       }
     } catch (e: any) {
@@ -624,10 +625,10 @@ export const ReceiptModal: React.FC = () => {
         }
       `}</style>
 
-      <div className={`w-full ${paperFormat === 'A4' ? 'max-w-3xl' : 'max-w-md'} bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 duration-150 my-auto transition-all`}>
+      <div className={`w-full ${paperFormat === 'A4' ? 'max-w-3xl' : 'max-w-md'} max-h-[92vh] flex flex-col bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 ${lang === 'ar' ? 'text-right' : 'text-left'} animate-in zoom-in-95 duration-150 my-auto transition-all`}>
         
         {/* Modal Top Header */}
-        <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 no-print">
+        <div className="shrink-0 p-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 no-print">
           <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
             <Receipt className="w-5 h-5 text-teal-600" />
             <span>{lang === 'ar' ? 'فاتورة المبيعات' : 'Facture de Vente'} ({activeSaleReceipt.invoice_number})</span>
@@ -640,9 +641,9 @@ export const ReceiptModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Paper Format Selector Tabs & Mobile Helper */}
-        <div className="p-3 bg-slate-100 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-1.5 no-print">
-          <div className="flex items-center gap-1.5 mx-auto sm:mx-0">
+        {/* Paper Format Selector Tabs */}
+        <div className="shrink-0 p-2.5 bg-slate-100 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-center no-print">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setPaperFormat('80mm')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
@@ -674,24 +675,12 @@ export const ReceiptModal: React.FC = () => {
               {lang === 'ar' ? 'ورق قياسي A4' : 'Standard A4'}
             </button>
           </div>
-
-          {/* Quick Phone Printer Help Button */}
-          {paperFormat !== 'A4' && (
-            <button
-              onClick={() => setIsGuideOpen(true)}
-              className="px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 text-blue-700 dark:text-blue-300 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer mx-auto sm:mx-0"
-              title={lang === 'ar' ? 'دليل ربط الطابعة بالهاتف وحل المشاكل' : 'Guide connexion téléphone'}
-            >
-              <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
-              <span>{lang === 'ar' ? 'ربط الطابعة بالهاتف؟' : 'Aide Bluetooth'}</span>
-            </button>
-          )}
         </div>
 
         {/* The Printable Invoice Container */}
         <div
           ref={previewContainerRef}
-          className="p-2 sm:p-4 overflow-x-hidden overflow-y-auto max-h-[72vh] bg-slate-100 dark:bg-slate-900/50 flex flex-col items-center"
+          className="flex-1 p-2 sm:p-4 overflow-x-hidden overflow-y-auto min-h-0 bg-slate-100 dark:bg-slate-900/50 flex flex-col items-center"
         >
           {paperFormat === 'A4' ? (
             /* Standard A4 Scaled Preview Container */
@@ -1088,8 +1077,8 @@ export const ReceiptModal: React.FC = () => {
           )}
         </div>
 
-        {/* Actions Bar (Print, Bluetooth, WhatsApp, Modifier) */}
-        <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap gap-2 no-print justify-center items-center">
+        {/* Actions Bar (Print, Bluetooth, WhatsApp, Modifier) - Fixed at bottom */}
+        <div className="shrink-0 p-2.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap gap-2 no-print justify-center items-center shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-10">
           {/* Modify Sale Button */}
           {activeSaleReceipt && (
             <button
