@@ -220,7 +220,7 @@ export class ThermalPrinterService {
   /**
    * Print a test ticket to verify Bluetooth communication
    */
-  public async printTestTicket(lang: string = 'ar'): Promise<{ success: boolean; error?: string }> {
+  public async printTestTicket(lang: string = 'ar', paperWidth: '58mm' | '80mm' = '80mm'): Promise<{ success: boolean; error?: string }> {
     const isConnected = this.connectedDevice?.gatt?.connected && this.writeCharacteristic;
     if (!isConnected) {
       const conn = await this.connectBluetoothPrinter();
@@ -228,46 +228,49 @@ export class ThermalPrinterService {
     }
 
     try {
-      // Build test canvas
+      // Build test canvas matching exact paper width (80mm: 576 dots, 58mm: 384 dots)
+      const is80mm = paperWidth === '80mm';
+      const width = is80mm ? 576 : 384;
+      const height = is80mm ? 250 : 220;
+
       const canvas = document.createElement('canvas');
-      const width = 384; // 58mm standard
       canvas.width = width;
-      canvas.height = 240;
+      canvas.height = height;
       const ctx = canvas.getContext('2d')!;
 
       // Background
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, canvas.height);
+      ctx.fillRect(0, 0, width, height);
 
       // Text setup
       ctx.fillStyle = '#000000';
       ctx.textAlign = 'center';
 
       // Title
-      ctx.font = 'bold 24px Cairo, sans-serif';
-      ctx.fillText(lang === 'ar' ? 'تطبيق تاجر - TAJER' : 'TAJER POS APP', width / 2, 45);
+      ctx.font = is80mm ? 'bold 28px Cairo, sans-serif' : 'bold 22px Cairo, sans-serif';
+      ctx.fillText(lang === 'ar' ? 'تطبيق تاجر - TAJER POS' : 'TAJER POS APP', width / 2, is80mm ? 48 : 42);
 
       // Subtitle
-      ctx.font = '16px Cairo, sans-serif';
-      ctx.fillText(lang === 'ar' ? 'اختبار اتصال الطابعة الحرارية ناجح ✓' : 'Test Impression Thermique Réussi ✓', width / 2, 85);
+      ctx.font = is80mm ? 'bold 18px Cairo, sans-serif' : '15px Cairo, sans-serif';
+      ctx.fillText(lang === 'ar' ? 'اختبار اتصال الطابعة الحرارية ناجح ✓' : 'Test Impression Thermique Réussi ✓', width / 2, is80mm ? 90 : 80);
 
       // Separator
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(20, 110);
-      ctx.lineTo(width - 20, 110);
+      ctx.moveTo(is80mm ? 25 : 15, is80mm ? 115 : 100);
+      ctx.lineTo(width - (is80mm ? 25 : 15), is80mm ? 115 : 100);
       ctx.stroke();
 
       // Details
-      ctx.font = '14px Cairo, monospace';
+      ctx.font = is80mm ? '16px Cairo, monospace' : '13px Cairo, monospace';
       const timeStr = new Date().toLocaleString('fr-FR');
-      ctx.fillText(lang === 'ar' ? `التاريخ: ${timeStr}` : `Date: ${timeStr}`, width / 2, 145);
-      ctx.fillText(lang === 'ar' ? 'الطابعة متصلة وجاهزة للعمل 100%' : 'Imprimante connectée et prête', width / 2, 175);
+      ctx.fillText(lang === 'ar' ? `التاريخ: ${timeStr}` : `Date: ${timeStr}`, width / 2, is80mm ? 150 : 132);
+      ctx.fillText(lang === 'ar' ? `عرض الورق: ${paperWidth} | الطابعة جاهزة للعمل 100%` : `Format: ${paperWidth} | Imprimante connectée et prête`, width / 2, is80mm ? 182 : 162);
 
       // Footer
-      ctx.font = 'bold 13px Cairo, sans-serif';
-      ctx.fillText('www.tajer.ma', width / 2, 215);
+      ctx.font = is80mm ? 'bold 16px Cairo, sans-serif' : 'bold 13px Cairo, sans-serif';
+      ctx.fillText('www.tajer.ma', width / 2, is80mm ? 222 : 196);
 
       // Convert to ESC/POS Raster and send
       const escposData = this.canvasToEscPosRaster(canvas);
@@ -359,9 +362,10 @@ export class ThermalPrinterService {
       }
     }
 
-    // 8. Feed paper and partial cut (ESC d 4 + GS V 66 0)
-    rasterData.push(0x1B, 0x64, 0x04); // Feed 4 lines
-    rasterData.push(0x1D, 0x56, 0x42, 0x00); // Partial cut
+    // 8. Feed paper cleanly (2 lines) and send direct cut command (prevents 15cm blank paper feed on portable printers)
+    rasterData.push(0x1B, 0x64, 0x02); // Feed 2 lines
+    rasterData.push(0x1D, 0x56, 0x01); // GS V 1: Partial cut without forcing massive feed
+    rasterData.push(0x0A); // Final newline
 
     return new Uint8Array(rasterData);
   }

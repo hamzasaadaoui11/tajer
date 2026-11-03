@@ -394,15 +394,6 @@ export const SalesView: React.FC = () => {
                     <CreditCard className="w-4 h-4" />
                   </button>
 
-                  {/* Return Item */}
-                  <button
-                    onClick={() => handleOpenReturn(sale)}
-                    className="p-1.5 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-600 border border-amber-200 dark:border-amber-800 cursor-pointer transition"
-                    title={lang === 'ar' ? 'تسجيل إرجاع بضاعة (Retour)' : 'Retour de marchandise'}
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
-
                   {/* WhatsApp */}
                   <button
                     onClick={() => {

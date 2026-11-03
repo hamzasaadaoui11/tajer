@@ -55,6 +55,8 @@ export const SettingsView: React.FC = () => {
     refreshData,
     user,
     updatePassword,
+    printSettings,
+    updatePrintSettings,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'store' | 'general' | 'categories' | 'security'>('store');
@@ -87,7 +89,8 @@ export const SettingsView: React.FC = () => {
     setIsTestingPrinter(true);
     setPrinterTestMsg(null);
     try {
-      const res = await thermalPrinterService.printTestTicket(lang);
+      const paperSize = printSettings?.paperSize === '58mm' ? '58mm' : '80mm';
+      const res = await thermalPrinterService.printTestTicket(lang, paperSize);
       if (res.success) {
         setSavedPrinter(thermalPrinterService.getSavedPrinterName());
         setPrinterTestMsg({
@@ -1603,6 +1606,42 @@ export const SettingsView: React.FC = () => {
             </p>
 
 
+
+            {/* Preferred Paper Format Choice */}
+            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {lang === 'ar' ? 'قياس رولو الورق الافتراضي (Paper Size)' : 'Format papier thermique par défaut'}
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  {lang === 'ar' ? 'اختر القياس المناسب لطابعتك لتظهر الفاتورة بكامل العرض بدون فراغات' : 'Choisissez la largeur adaptée à votre imprimante'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => updatePrintSettings({ ...printSettings, paperSize: '80mm' })}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    (printSettings?.paperSize || '80mm') === '80mm'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
+                  }`}
+                >
+                  80mm {lang === 'ar' ? '(عريض)' : '(Large)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updatePrintSettings({ ...printSettings, paperSize: '58mm' })}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    printSettings?.paperSize === '58mm'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
+                  }`}
+                >
+                  58mm {lang === 'ar' ? '(محمول)' : '(Portable)'}
+                </button>
+              </div>
+            </div>
 
             {savedPrinter && (
               <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 flex items-center justify-between text-xs">

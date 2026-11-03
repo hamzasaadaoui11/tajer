@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { thermalPrinterService } from '../../services/thermalPrinter';
 import { Language } from '../../i18n/locales';
+import { useApp } from '../../context/AppContext';
 
 interface Props {
   isOpen: boolean;
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export const ThermalPrinterGuideModal: React.FC<Props> = ({ isOpen, onClose, lang = 'ar' }) => {
+  const { printSettings } = useApp();
   const [testingBt, setTestingBt] = useState(false);
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null);
 
@@ -32,7 +34,8 @@ export const ThermalPrinterGuideModal: React.FC<Props> = ({ isOpen, onClose, lan
     setTestingBt(true);
     setTestResult(null);
     try {
-      const res = await thermalPrinterService.printTestTicket(lang);
+      const paperSize = printSettings?.paperSize === '58mm' ? '58mm' : '80mm';
+      const res = await thermalPrinterService.printTestTicket(lang, paperSize);
       if (res.success) {
         setTestResult({
           success: true,
